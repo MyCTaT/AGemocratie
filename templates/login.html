@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Connexion administrateur{% endblock %}
+{% block content %}
+<div class="center-narrow hero compact-hero">
+  <div class="eyebrow">Espace privé</div>
+  <h1>Administration<span class="accent">.</span></h1>
+  <p class="subtitle">Chaque administrateur se connecte avec son propre compte.</p>
+</div>
+<section class="center-narrow card access-card">
+  <h2>Connexion</h2>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  <form action="/admin/login" method="post" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="username">Identifiant administrateur</label>
+    <input type="text" id="username" name="username" value="admin" autocomplete="username" required autofocus>
+    <label for="password">Mot de passe</label>
+    <input type="password" id="password" name="password" autocomplete="current-password" required>
+    <button type="submit" class="button button-primary full">Se connecter →</button>
+  </form>
+</section>
+{% endblock %}

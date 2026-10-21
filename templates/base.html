@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Vote par code{% endblock %} · AGemocratie</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="AGemocratie, accueil"><span class="brand-icon">✓</span><span>AGemocratie<span class="brand-dot">.</span></span></a>
+      <nav class="nav" aria-label="Navigation principale">
+        <a href="/">Participer</a>
+        <a href="/admin">Administration</a>
+        {% if is_owner %}<a href="/admin/users">Comptes admin</a>{% endif %}
+        {% if is_admin %}
+        <form action="/admin/logout" method="post" class="nav-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="logout">Déconnexion</button></form>
+        {% endif %}
+      </nav>
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+    <footer class="footer"><span>AGemocratie · Site démocratique pour les AG</span><span>Codé et imaginé par MyCTaT.</span></footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Exprimer mon choix{% endblock %}
+{% block content %}
+<div class="center-narrow vote-layout">
+  <a class="back-link" href="/">← Accueil</a>
+  <div class="eyebrow"><span class="status-dot"></span> Vote en cours</div>
+  <h1 class="vote-title">{{ poll.title }}</h1>
+  {% if poll.description %}<p class="subtitle">{{ poll.description }}</p>{% endif %}
+  <section class="card voting-card">
+    <h2>Choisissez une réponse</h2>
+    <p class="muted">Une seule proposition peut être sélectionnée.</p>
+    {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+    <form action="/vote" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="choices">
+        {% for option in options %}
+        <label class="choice"><input type="radio" name="option_id" value="{{ option.id }}" required><span class="choice-label">{{ option.label }}</span><span class="choice-check" aria-hidden="true">✓</span></label>
+        {% endfor %}
+      </div>
+      <button class="button button-primary full" type="submit">Confirmer mon vote <span aria-hidden="true">→</span></button>
+      <p class="small-note">Attention : vous ne pourrez pas modifier votre vote après confirmation.</p>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: agora-vote-codes
+    runtime: python
+    plan: 0.5c-512mb
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /health
+    numInstances: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DATABASE_PATH
+        value: /var/data/votes.sqlite3
+      - key: COOKIE_SECURE
+        value: "1"
+    disk:
+      name: votes-data
+      mountPath: /var/data
+      sizeGB: 1

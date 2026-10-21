@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Gestion du vote{% endblock %}
+{% block content %}
+<div class="inner-page">
+  <a class="back-link" href="/admin">← Retour au tableau de bord</a>
+  <div class="eyebrow">Vote n° {{ poll.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% else %}Terminé{% endif %}</div>
+  <h1>{{ poll.title }}<span class="accent">.</span></h1>
+  {% if poll.description %}<p class="subtitle">{{ poll.description }}</p>{% endif %}
+  {% if created %}<div class="notice" role="status">Vote créé ! Vous pouvez générer les codes.</div>{% endif %}
+  {% if closed %}<div class="notice" role="status">Vote clôturé manuellement.</div>{% endif %}
+  {% if schedule_saved %}<div class="notice" role="status">Dates enregistrées.</div>{% endif %}
+  <section class="card panel">
+    <h2>Calendrier du vote</h2>
+    <p>Début : <strong>{{ poll.starts_at|local_date }}</strong> · Fin : <strong>{{ poll.ends_at|local_date }}</strong> (heure de Paris).</p>
+    {% if phase != 'ended' %}
+    <p class="muted">Vous pouvez régler ces dates tant que le vote n'est pas terminé. Pour un ancien vote sans dates, choisissez-les ici.</p>
+    <form class="form-stack" method="post" action="/admin/polls/{{ poll.id }}/schedule">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="starts_at">Début (heure française)</label>
+      <input type="datetime-local" id="starts_at" name="starts_at" value="{{ poll.starts_at|local_input }}" required>
+      <label for="ends_at">Fin (heure française)</label>
+      <input type="datetime-local" id="ends_at" name="ends_at" value="{{ poll.ends_at|local_input }}" required>
+      <button class="button button-secondary" type="submit">Enregistrer les dates</button>
+    </form>
+    {% endif %}
+  </section>
+  <div class="stats-grid">
+    <div class="stat card"><span>Codes générés</span><strong>{{ stats.total_codes }}</strong></div>
+    <div class="stat card"><span>Participation</span><strong>{% if show_results %}{{ total_votes }}{% else %}Masquée jusqu'à la fin{% endif %}</strong></div>
+  </div>
+  <div class="admin-grid">
+    <section class="card panel">
+      <h2>Résultats</h2>
+      {% if show_results %}
+        {% for result in results %}
+        <div class="result-row"><div class="result-top"><span>{{ result.label }}</span><strong>{{ result.votes }} <span class="muted">({{ result.percent }} %)</span></strong></div><progress value="{{ result.percent }}" max="100">{{ result.percent }} %</progress></div>
+        {% endfor %}
+        {% if total_votes == 0 %}<p class="hint">Aucun bulletin enregistré.</p>{% endif %}
+      {% else %}
+        <div class="notice">Les résultats sont cachés jusqu'à l'heure de fin ou la clôture manuelle.</div>
+      {% endif %}
+    </section>
+    <section class="card panel"><h2>Codes d'accès</h2>
+      {% if phase != 'ended' %}
+        <p class="muted">Un clic = un code. Les codes peuvent être distribués avant l'ouverture du vote.</p>
+        {% if generated_code %}
+          <div class="notice" role="status"><h3>Votre nouveau code :</h3><h2>{{ generated_code }}</h2><p>Copiez-le maintenant, il ne sera plus affiché après un rafraîchissement.</p></div>
+        {% endif %}
+        <form method="post" action="/admin/polls/{{ poll.id }}/codes" class="form-stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button button-primary full" type="submit">+ Générer un code</button>
+        </form>
+        <div class="divider"></div>
+        <h3>Clôture anticipée</h3>
+        <p class="muted">La clôture est définitive et rend immédiatement visibles les résultats.</p>
+        <form method="post" action="/admin/polls/{{ poll.id }}/close">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button button-danger" type="submit">Clôturer le vote</button>
+        </form>
+      {% else %}
+        <div class="notice">Vote terminé : aucun nouveau code ne peut être généré ou utilisé.</div>
+      {% endif %}
+    </section>
+  </div>
+  <section class="card panel">
+    <h2>Supprimer ce sujet</h2>
+    <p class="muted">Attention : cette opération est définitive. Tous les codes, les réponses possibles et les bulletins de ce sujet seront supprimés. Les autres sujets ne changent pas.</p>
+    <form action="/admin/polls/{{ poll.id }}/delete" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="confirm_title">Pour confirmer, recopiez exactement ce titre : <strong>{{ poll.title }}</strong></label>
+      <input id="confirm_title" type="text" name="confirmation_titre" autocomplete="off" required>
+      <button type="submit" class="button button-danger">Supprimer définitivement ce sujet</button>
+    </form>
+  </section>
+</div>
+{% endblock %}
