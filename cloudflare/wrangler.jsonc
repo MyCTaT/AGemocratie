@@ -5,6 +5,9 @@
   "compatibility_flags": [
     "python_workers"
   ],
+  "secrets": {
+    "required": ["APP_SECRET_KEY"]
+  },
   "d1_databases": [
     {
       "binding": "DB",
