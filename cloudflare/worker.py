@@ -1,7 +1,7 @@
 """AGémocratie / Cloudflare Workers.
 
 Application locale inchangée. Administration D1 (connexion, comptes,
-création/calendrier/clôture/suppression de scrutins). Le vote demeure
+création/calendrier/clôture/suppression de scrutins et assemblées générales). Le vote demeure
 volontairement désactivé jusqu'à la migration atomique des codes.
 
 Secrets requis dans Cloudflare Worker (pas dans Git) : APP_SECRET_KEY.
@@ -29,6 +29,8 @@ DOSSIER = Path(__file__).resolve().parent
 PARIS = ZoneInfo("Europe/Paris")
 SESSION = "__Host-ag_session"
 CSRF = "__Host-ag_csrf"
+COOKIE_AG = "__Host-ag_access"
+DUREE_ACCES_AG = 4 * 60 * 60
 DUREE_SESSION = 4 * 60 * 60
 DUREE_LIMITE = 15 * 60
 ITERATIONS_MIN = 100_000
@@ -251,7 +253,8 @@ def _scrutin(ligne):
     else:
         phase = "open"
     return {
-        "id": int(ligne["id"]), "title": str(ligne["titre"]),
+        "id": int(ligne["id"]), "ag_id": int(ligne["assemblee_id"]) if ligne.get("assemblee_id") is not None else None,
+        "title": str(ligne["titre"]),
         "description": str(ligne.get("description") or ""),
         "starts_at": int(debut.timestamp()) if debut else None,
         "ends_at": int(fin.timestamp()) if fin else None,
@@ -367,31 +370,216 @@ async def tester_bdd(requete: Request):
     return {"d1": "connectee" if valeur == 1 else "indisponible"}
 
 
+def _ag(ligne):
+    return {
+        "id": int(ligne["id"]), "title": str(ligne["titre"]),
+        "description": str(ligne.get("description") or ""),
+        "total_sujets": int(ligne.get("total_sujets") or 0),
+        "total_codes": int(ligne.get("total_codes") or 0),
+    }
+
+
+async def _ag_detail(requete, id_ag):
+    ligne = _objet(await _bdd(requete).prepare(
+        "SELECT id,titre,description FROM assemblees WHERE id=?"
+    ).bind(id_ag).first())
+    if ligne is None:
+        raise HTTPException(404, detail="AG introuvable")
+    return _ag(ligne)
+
+
+def _empreinte_code_ag(secret: bytes, ag_id: int, code: str) -> str:
+    return _signature(secret, f"ag-code:{ag_id}:{code}".encode())
+
+
+def _creer_acces_ag(secret: bytes, ag_id: int, code_id: int) -> str:
+    donnees = {"a": ag_id, "c": code_id, "e": int(time.time()) + DUREE_ACCES_AG,
+               "n": secrets.token_urlsafe(12)}
+    brut = json.dumps(donnees, separators=(",", ":")).encode()
+    enc = base64.urlsafe_b64encode(brut).rstrip(b"=").decode()
+    return enc + "." + _signature(secret, b"ag-access:" + enc.encode())
+
+
+async def _acces_ag(requete: Request, ag_id: int):
+    cookie = requete.cookies.get(COOKIE_AG, "")
+    if not cookie or len(cookie) > 1024:
+        return None
+    try:
+        enc, sig = cookie.rsplit(".", 1)
+        if not hmac.compare_digest(sig, _signature(_secret(requete), b"ag-access:" + enc.encode())):
+            return None
+        donnees = json.loads(base64.urlsafe_b64decode(enc + "=" * (-len(enc) % 4)))
+        if (type(donnees.get("a")) is not int or type(donnees.get("c")) is not int
+                or type(donnees.get("e")) is not int or donnees["a"] != ag_id
+                or donnees["e"] <= int(time.time())):
+            return None
+        code_id = donnees["c"]
+    except (KeyError, ValueError, UnicodeError, TypeError, OverflowError):
+        return None
+    ligne = await _bdd(requete).prepare(
+        "SELECT id FROM ag_codes WHERE id=? AND assemblee_id=?"
+    ).bind(code_id, ag_id).first()
+    return code_id if ligne is not None else None
+
+
+def _retour_ag(id_ag):
+    return _lien(f"/ag/{id_ag}")
+
+
 @app.get("/")
 async def accueil(requete: Request):
     compte = await _compte(requete)
-    resultat = await _bdd(requete).prepare(
-        "SELECT id,titre,description,debut_utc,fin_utc,ferme_manuellement "
-        "FROM scrutins ORDER BY cree_le DESC,id DESC"
-    ).all()
-    sujets = [_scrutin(l) for l in _lignes(resultat)]
-    ordre = {"open": 0, "upcoming": 1, "ended": 2}
-    sujets.sort(key=lambda s: (ordre[s["phase"]], -s["id"]))
-    return _rendu(requete, "home.html", compte=compte, polls=sujets, success=False)
+    lignes = await _bdd(requete).prepare("""
+        SELECT a.id,a.titre,a.description,
+          (SELECT count(*) FROM scrutins s WHERE s.assemblee_id=a.id) AS total_sujets
+        FROM assemblees a ORDER BY a.cree_le DESC,a.id DESC
+    """).all()
+    ags = [_ag(x) for x in _lignes(lignes)]
+    return _rendu(requete, "home.html", compte=compte, ags=ags)
 
 
 @app.get("/polls/{id_sujet}")
-async def apercu_sujet(requete: Request, id_sujet: int):
-    compte = await _compte(requete)
+async def ancien_lien_sujet(requete: Request, id_sujet: int):
     ligne = _objet(await _bdd(requete).prepare(
-        "SELECT id,titre,description,debut_utc,fin_utc,ferme_manuellement "
-        "FROM scrutins WHERE id=?"
+        "SELECT assemblee_id FROM scrutins WHERE id=?"
     ).bind(id_sujet).first())
-    if not ligne:
+    if not ligne or ligne.get("assemblee_id") is None:
         raise HTTPException(404, detail="Sujet introuvable")
+    return _retour_ag(int(ligne["assemblee_id"]))
+
+
+@app.get("/ag/{id_ag}")
+async def page_ag(requete: Request, id_ag: int):
+    ag = await _ag_detail(requete, id_ag)
+    compte = await _compte(requete)
+    code_id = await _acces_ag(requete, id_ag)
+    if code_id is None:
+        return _rendu(requete, "ag_access.html", compte=compte, ag=ag)
+    lignes = await _bdd(requete).prepare("""
+        SELECT s.id,s.assemblee_id,s.titre,s.description,s.debut_utc,s.fin_utc,
+               s.ferme_manuellement,
+               EXISTS(SELECT 1 FROM ag_votes v
+                      WHERE v.scrutin_id=s.id AND v.code_id=?) AS deja_vote
+        FROM scrutins s WHERE s.assemblee_id=? ORDER BY s.cree_le,s.id
+    """).bind(code_id, id_ag).all()
+    sujets = []
+    for ligne in _lignes(lignes):
+        sujet = _scrutin(ligne)
+        sujet["deja_vote"] = bool(ligne["deja_vote"])
+        sujets.append(sujet)
+    return _rendu(requete, "ag_topics.html", compte=compte, ag=ag, polls=sujets,
+                  voted=requete.query_params.get("voted") == "1",
+                  already=requete.query_params.get("already") == "1")
+
+
+def _portees_code_ag(requete: Request, secret: bytes, id_ag: int):
+    ip = requete.headers.get("cf-connecting-ip") or (
+        requete.client.host if requete.client else "unknown")
+    return [_signature(secret, f"ag-ip:{ip}".encode()),
+            _signature(secret, f"ag-ip:{id_ag}:{ip}".encode())]
+
+
+@app.post("/ag/{id_ag}/access")
+async def entrer_ag(requete: Request, id_ag: int):
+    await _ag_detail(requete, id_ag)
+    secret = _secret(requete)
+    form = await requete.form()
+    _csrf_valide(requete, secret, form)
+    code = str(form.get("code", "")).strip()
+    bdd = _bdd(requete)
+    portees = _portees_code_ag(requete, secret, id_ag)
+    if await _limite(bdd, portees):
+        return _rendu(requete, "ag_access.html", statut=429,
+                      ag=await _ag_detail(requete, id_ag),
+                      error="Trop de tentatives. Réessayez dans 15 minutes.")
+    ligne = None
+    if re.fullmatch(r"[0-9]{10}", code):
+        ligne = _objet(await bdd.prepare(
+            "SELECT id FROM ag_codes WHERE assemblee_id=? AND empreinte_code=?"
+        ).bind(id_ag, _empreinte_code_ag(secret, id_ag, code)).first())
+    if ligne is None:
+        await _echec(bdd, portees)
+        return _rendu(requete, "ag_access.html", statut=401,
+                      ag=await _ag_detail(requete, id_ag),
+                      error="Code d'accès invalide.")
+    reponse = _retour_ag(id_ag)
+    reponse.set_cookie(COOKIE_AG, _creer_acces_ag(secret, id_ag, int(ligne["id"])),
+                       max_age=DUREE_ACCES_AG, httponly=True,
+                       secure=True, samesite="lax", path="/")
+    return reponse
+
+
+@app.post("/ag/{id_ag}/exit")
+async def quitter_ag(requete: Request, id_ag: int):
+    form = await requete.form()
+    _csrf_valide(requete, _secret(requete), form)
+    reponse = _lien("/")
+    reponse.delete_cookie(COOKIE_AG, path="/", secure=True, httponly=True, samesite="lax")
+    return reponse
+
+
+@app.get("/ag/{id_ag}/vote/{id_sujet}")
+async def page_vote_ag(requete: Request, id_ag: int, id_sujet: int):
+    code_id = await _acces_ag(requete, id_ag)
+    if code_id is None:
+        return _retour_ag(id_ag)
+    ag = await _ag_detail(requete, id_ag)
+    ligne = _objet(await _bdd(requete).prepare(
+        "SELECT id,assemblee_id,titre,description,debut_utc,fin_utc,ferme_manuellement "
+        "FROM scrutins WHERE id=? AND assemblee_id=?"
+    ).bind(id_sujet, id_ag).first())
+    if ligne is None:
+        raise HTTPException(404, detail="Sujet introuvable dans cette AG")
     sujet = _scrutin(ligne)
-    return _rendu(requete, "poll_preview.html", compte=compte,
-                  poll=sujet, phase=sujet["phase"])
+    dej = await _bdd(requete).prepare(
+        "SELECT id FROM ag_votes WHERE code_id=? AND scrutin_id=?"
+    ).bind(code_id, id_sujet).first()
+    options = _lignes(await _bdd(requete).prepare(
+        "SELECT id,intitule FROM choix WHERE scrutin_id=? ORDER BY position"
+    ).bind(id_sujet).all())
+    resultats = None
+    if sujet["phase"] == "ended":
+        # Résultats uniquement après la clôture, votes historiques inclus.
+        comptes = _lignes(await _bdd(requete).prepare("""
+            SELECT c.id,c.intitule,
+              ((SELECT count(*) FROM votes v WHERE v.choix_id=c.id AND v.scrutin_id=?)
+              +(SELECT count(*) FROM ag_votes v WHERE v.choix_id=c.id AND v.scrutin_id=?)) AS total
+            FROM choix c WHERE c.scrutin_id=? ORDER BY c.position
+        """).bind(id_sujet, id_sujet, id_sujet).all())
+        resultats = comptes
+    return _rendu(requete, "ag_vote.html", ag=ag, poll=sujet, options=options,
+                  deja_vote=dej is not None, resultats=resultats)
+
+
+@app.post("/ag/{id_ag}/vote/{id_sujet}")
+async def enregistrer_vote_ag(requete: Request, id_ag: int, id_sujet: int):
+    code_id = await _acces_ag(requete, id_ag)
+    if code_id is None:
+        return _retour_ag(id_ag)
+    form = await requete.form()
+    _csrf_valide(requete, _secret(requete), form)
+    try:
+        choix_id = int(str(form.get("option_id", "")))
+    except ValueError:
+        raise HTTPException(400, detail="Choix invalide") from None
+    # L'insertion unique, effectuée par D1, résiste aux soumissions concurrentes.
+    # La vérification de l'AG et du créneau du sujet est faite en SQL,
+    # dans la même instruction que l'insertion du vote.
+    resultat = await _bdd(requete).prepare("""
+        INSERT OR IGNORE INTO ag_votes (assemblee_id,scrutin_id,choix_id,code_id)
+        SELECT s.assemblee_id,s.id,c.id,ac.id
+        FROM scrutins s
+        JOIN choix c ON c.scrutin_id=s.id AND c.id=?
+        JOIN ag_codes ac ON ac.assemblee_id=s.assemblee_id AND ac.id=?
+        WHERE s.id=? AND s.assemblee_id=? AND s.ferme_manuellement=0
+          AND unixepoch(s.debut_utc) <= unixepoch('now')
+          AND unixepoch(s.fin_utc) > unixepoch('now')
+          AND NOT EXISTS (SELECT 1 FROM ag_votes v
+                          WHERE v.code_id=ac.id AND v.scrutin_id=s.id)
+    """).bind(choix_id, code_id, id_sujet, id_ag).run()
+    if int(resultat.meta.changes) < 1:
+        return _lien(f"/ag/{id_ag}?already=1")
+    return _lien(f"/ag/{id_ag}?voted=1")
 
 
 @app.get("/admin/login")
@@ -451,20 +639,109 @@ async def tableau_bord(requete: Request):
     compte, refus = await _auth(requete)
     if refus:
         return refus
-    resultat = await _bdd(requete).prepare("""
-        SELECT s.id,s.titre,s.description,s.debut_utc,s.fin_utc,s.ferme_manuellement,
-          (SELECT count(*) FROM codes_vote c WHERE c.scrutin_id=s.id) AS total_codes,
-          (SELECT count(*) FROM votes v WHERE v.scrutin_id=s.id) AS total_votes
-        FROM scrutins s ORDER BY s.cree_le DESC, s.id DESC
+    lignes = await _bdd(requete).prepare("""
+        SELECT a.id,a.titre,a.description,
+          (SELECT count(*) FROM scrutins s WHERE s.assemblee_id=a.id) AS total_sujets,
+          (SELECT count(*) FROM ag_codes c WHERE c.assemblee_id=a.id) AS total_codes
+        FROM assemblees a ORDER BY a.cree_le DESC,a.id DESC
     """).all()
-    sujets = []
-    for ligne in _lignes(resultat):
-        sujet = _scrutin(ligne)
-        sujet["total_codes"] = int(ligne["total_codes"])
-        # Ne JAMAIS envoyer les décomptes de votes en cours au navigateur.
-        sujet["total_votes"] = int(ligne["total_votes"]) if sujet["phase"] == "ended" else None
-        sujets.append(sujet)
-    return _rendu(requete, "dashboard.html", compte=compte, polls=sujets)
+    return _rendu(requete, "dashboard.html", compte=compte,
+                  ags=[_ag(x) for x in _lignes(lignes)])
+
+
+@app.get("/admin/ags/new")
+async def page_creation_ag(requete: Request):
+    compte, refus = await _auth(requete)
+    if refus:
+        return refus
+    return _rendu(requete, "ag_new.html", compte=compte)
+
+
+@app.post("/admin/ags/new")
+async def creer_ag(requete: Request):
+    compte, refus = await _auth(requete)
+    if refus:
+        return refus
+    form = await requete.form()
+    _csrf_valide(requete, _secret(requete), form)
+    titre = str(form.get("title", "")).strip()
+    description = str(form.get("description", "")).strip()
+    if not (3 <= len(titre) <= 140 and len(description) <= 600):
+        return _rendu(requete, "ag_new.html", compte=compte, statut=400,
+                      titre=titre, description=description,
+                      error="Titre ou description invalide.")
+    id_ag = secrets.randbelow(2**52 - 2**40) + 2**40
+    await _bdd(requete).prepare(
+        "INSERT INTO assemblees (id,titre,description,cree_par) VALUES (?,?,?,?)"
+    ).bind(id_ag, titre, description, int(compte["id"])).run()
+    return _lien(f"/admin/ags/{id_ag}?created=1")
+
+
+@app.get("/admin/ags/{id_ag}")
+async def gerer_ag(requete: Request, id_ag: int):
+    compte, refus = await _auth(requete)
+    if refus:
+        return refus
+    ag = await _ag_detail(requete, id_ag)
+    lignes = await _bdd(requete).prepare("""
+        SELECT s.id,s.assemblee_id,s.titre,s.description,s.debut_utc,s.fin_utc,s.ferme_manuellement
+        FROM scrutins s WHERE s.assemblee_id=? ORDER BY s.cree_le DESC,s.id DESC
+    """).bind(id_ag).all()
+    sujets = [_scrutin(l) for l in _lignes(lignes)]
+    nombres = _objet(await _bdd(requete).prepare(
+        "SELECT count(*) AS total FROM ag_codes WHERE assemblee_id=?"
+    ).bind(id_ag).first())
+    return _rendu(requete, "ag_manage.html", compte=compte, ag=ag, polls=sujets,
+                  total_codes=int(nombres["total"]),
+                  created=requete.query_params.get("created") == "1")
+
+
+@app.post("/admin/ags/{id_ag}/codes")
+async def generer_code_ag(requete: Request, id_ag: int):
+    compte, refus = await _auth(requete)
+    if refus:
+        return refus
+    form = await requete.form()
+    _csrf_valide(requete, _secret(requete), form)
+    ag = await _ag_detail(requete, id_ag)
+    secret = _secret(requete)
+    bdd = _bdd(requete)
+    for _ in range(5):
+        code = f"{secrets.randbelow(10**10):010d}"
+        empreinte = _empreinte_code_ag(secret, id_ag, code)
+        doublon = await bdd.prepare(
+            "SELECT id FROM ag_codes WHERE empreinte_code=?"
+        ).bind(empreinte).first()
+        if doublon is not None:
+            continue
+        try:
+            await bdd.prepare(
+                "INSERT INTO ag_codes (assemblee_id,empreinte_code) VALUES (?,?)"
+            ).bind(id_ag, empreinte).run()
+        except Exception:
+            # Une collision concurrente peut exceptionnellement se produire.
+            raise HTTPException(409, detail="Impossible de générer ce code. Réessayez.") from None
+        return _rendu(requete, "ag_code_generated.html", compte=compte,
+                      ag=ag, code=code)
+    raise HTTPException(503, detail="Génération de code indisponible")
+
+
+@app.post("/admin/ags/{id_ag}/delete")
+async def supprimer_ag(requete: Request, id_ag: int):
+    compte, refus = await _auth(requete, principal=True)
+    if refus:
+        return refus
+    ag = await _ag_detail(requete, id_ag)
+    form = await requete.form()
+    _csrf_valide(requete, _secret(requete), form)
+    if not hmac.compare_digest(str(form.get("confirmation_titre", "")), ag["title"]):
+        raise HTTPException(400, detail="Titre de confirmation incorrect")
+    resultat = await _bdd(requete).prepare(
+        "DELETE FROM assemblees WHERE id=? AND titre=?"
+    ).bind(id_ag, ag["title"]).run()
+    if int(resultat.meta.changes) < 1:
+        raise HTTPException(409, detail="AG introuvable ou modifiée")
+    return _lien("/admin?deleted_ag=1")
 
 
 @app.get("/admin/polls/new")
@@ -472,7 +749,12 @@ async def page_creation(requete: Request):
     compte, refus = await _auth(requete)
     if refus:
         return refus
-    return _rendu(requete, "new_poll.html", compte=compte)
+    try:
+        id_ag = int(requete.query_params.get("ag_id", ""))
+    except ValueError:
+        return _lien("/admin")
+    ag = await _ag_detail(requete, id_ag)
+    return _rendu(requete, "new_poll.html", compte=compte, ag=ag)
 
 
 @app.post("/admin/polls/new")
@@ -482,6 +764,11 @@ async def creer_scrutin(requete: Request):
         return refus
     form = await requete.form()
     _csrf_valide(requete, _secret(requete), form)
+    try:
+        id_ag = int(str(form.get("ag_id", "")))
+    except ValueError:
+        raise HTTPException(400, detail="AG invalide") from None
+    ag = await _ag_detail(requete, id_ag)
     titre = str(form.get("title", "")).strip()
     description = str(form.get("description", "")).strip()
     propositions = [p.strip() for p in str(form.get("options", "")).splitlines() if p.strip()]
@@ -491,21 +778,19 @@ async def creer_scrutin(requete: Request):
             and all(len(p) <= 140 for p in propositions)
             and len({p.casefold() for p in propositions}) == len(propositions)
             and horaires):
-        return _rendu(requete, "new_poll.html", compte=compte, statut=400,
+        return _rendu(requete, "new_poll.html", compte=compte, ag=ag, statut=400,
                       title_value=titre, description_value=description,
                       options_value="\n".join(propositions),
                       starts_value=form.get("starts_at", ""),
                       ends_value=form.get("ends_at", ""),
                       error="Vérifiez le titre, les réponses et les dates (fin future après début).")
     debut, fin = horaires
-    # ID 52-bit aléatoire: partageable et représentable exactement par JS/D1.
-    # Réutilisé dans batch() pour que scrutin + choix soient atomiques.
     id_scrutin = secrets.randbelow(2**52 - 2**40) + 2**40
     bdd = _bdd(requete)
     statements = [bdd.prepare("""INSERT INTO scrutins
-        (id, titre, description, debut_utc, fin_utc, cree_par)
-        VALUES (?, ?, ?, ?, ?, ?)""").bind(id_scrutin, titre, description,
-                                               debut, fin, int(compte["id"]))]
+        (id,assemblee_id,titre,description,debut_utc,fin_utc,cree_par)
+        VALUES (?,?,?,?,?,?,?)""").bind(id_scrutin, id_ag, titre, description,
+                                          debut, fin, int(compte["id"]))]
     for position, libelle in enumerate(propositions):
         statements.append(bdd.prepare(
             "INSERT INTO choix (scrutin_id,intitule,position) VALUES (?,?,?)"
@@ -516,7 +801,7 @@ async def creer_scrutin(requete: Request):
 
 async def _detail_scrutin(requete, id_sujet):
     ligne = _objet(await _bdd(requete).prepare(
-        "SELECT id,titre,description,debut_utc,fin_utc,ferme_manuellement FROM scrutins WHERE id=?"
+        "SELECT id,assemblee_id,titre,description,debut_utc,fin_utc,ferme_manuellement FROM scrutins WHERE id=?"
     ).bind(id_sujet).first())
     if ligne is None:
         raise HTTPException(404, detail="Scrutin introuvable")
@@ -532,8 +817,18 @@ async def detail_scrutin(requete: Request, id_sujet: int):
     resultat = await _bdd(requete).prepare(
         "SELECT id,intitule,position FROM choix WHERE scrutin_id=? ORDER BY position"
     ).bind(id_sujet).all()
+    options = _lignes(resultat)
+    resultats = None
+    if scrutin["phase"] == "ended":
+        resultats = _lignes(await _bdd(requete).prepare("""
+            SELECT c.intitule,
+              ((SELECT count(*) FROM votes v WHERE v.choix_id=c.id AND v.scrutin_id=?)
+              +(SELECT count(*) FROM ag_votes v WHERE v.choix_id=c.id AND v.scrutin_id=?)) AS total
+            FROM choix c WHERE c.scrutin_id=? ORDER BY c.position
+        """).bind(id_sujet,id_sujet,id_sujet).all())
     return _rendu(requete, "poll_manage.html", compte=compte, poll=scrutin,
-                  options=_lignes(resultat), phase=scrutin["phase"],
+                  ag=await _ag_detail(requete, scrutin["ag_id"]), options=options,
+                  resultats=resultats, phase=scrutin["phase"],
                   created=requete.query_params.get("created") == "1",
                   schedule_saved=requete.query_params.get("schedule_saved") == "1",
                   closed=requete.query_params.get("closed") == "1")

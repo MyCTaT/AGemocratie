@@ -1,23 +1,17 @@
 {% extends 'base.html' %}
-{% block title %}Tableau de bord{% endblock %}
+{% block title %}Administration des AG{% endblock %}
 {% block content %}
-<div class="page-head"><div><div class="eyebrow">Espace administrateur</div><h1>Tableau de bord<span class="accent">.</span></h1><p class="subtitle">Créez et suivez vos consultations.</p></div><a class="button button-primary" href="/admin/polls/new">+ Créer un vote</a></div>
-{% if request.query_params.get('deleted') == '1' %}
-<div class="notice" role="status">Le sujet et ses données ont été supprimés.</div>
-{% endif %}
+<div class="page-head"><div><div class="eyebrow">Espace administrateur</div><h1>Assemblées générales<span class="accent">.</span></h1><p class="subtitle">Créez une AG, puis ajoutez ses sujets et distribuez un code individuel à chaque participant.</p></div><a class="button button-primary" href="/admin/ags/new">+ Créer une AG</a></div>
+{% if request.query_params.get('deleted_ag') == '1' %}<div class="notice" role="status">AG et sujets associés supprimés.</div>{% endif %}
+{% if request.query_params.get('deleted') == '1' %}<div class="notice" role="status">Sujet supprimé.</div>{% endif %}
 <section class="card panel">
-  <div class="panel-top"><h2>Mes votes</h2><span class="muted">{{ polls|length }} consultation{% if polls|length != 1 %}s{% endif %}</span></div>
-  {% if polls %}
-  <div class="poll-list">
-    {% for poll in polls %}
-    <a class="poll-row" href="/admin/polls/{{ poll.id }}">
-      <span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'open' %}<span class="mini-dot"></span> En cours{% else %}Terminé{% endif %} · {{ poll.total_codes }} code{% if poll.total_codes != 1 %}s{% endif %}</small></span>
-      <span class="poll-count">{% if poll.phase == 'ended' %}{{ poll.total_votes }} vote{% if poll.total_votes != 1 %}s{% endif %}{% else %}Résultats masqués{% endif %}</span><span class="arrow">→</span>
-    </a>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="empty-state"><div class="section-icon">✦</div><h3>Aucun vote pour le moment</h3><p class="muted">Commencez par créer votre première question.</p><a href="/admin/polls/new" class="button button-secondary">Créer un vote</a></div>
-  {% endif %}
+<div class="panel-top"><h2>Mes AG</h2><span class="muted">{{ ags|length }} AG</span></div>
+{% if ags %}<div class="poll-list">
+{% for ag in ags %}
+<a class="poll-row" href="/admin/ags/{{ ag.id }}">
+<span class="poll-main"><strong>{{ ag.title }}</strong><small>{{ ag.total_sujets }} sujet{% if ag.total_sujets != 1 %}s{% endif %} · {{ ag.total_codes }} code{% if ag.total_codes != 1 %}s{% endif %} attribué{% if ag.total_codes != 1 %}s{% endif %}</small></span><span class="arrow">→</span>
+</a>
+{% endfor %}</div>
+{% else %}<div class="empty-state"><h3>Pas encore d'AG</h3><p class="muted">Commencez par créer votre première assemblée générale.</p><a href="/admin/ags/new" class="button button-secondary">Créer une AG</a></div>{% endif %}
 </section>
 {% endblock %}

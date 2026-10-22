@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}{{ ag.title }}{% endblock %}
+{% block content %}
+<section class="center-wide inner-page">
+<a class="back-link" href="/">← Toutes les AG</a>
+<div class="eyebrow">Vous êtes dans votre AG</div>
+<h1>{{ ag.title }}<span class="accent">.</span></h1>
+{% if ag.description %}<p class="subtitle">{{ ag.description }}</p>{% endif %}
+{% if voted %}<div class="notice" role="status">Votre vote a été enregistré ! Vous pouvez voter sur les autres sujets.</div>{% endif %}
+{% if already %}<div class="alert" role="status">Ce vote n'a pas été enregistré : vous avez peut-être déjà voté, ou le sujet est terminé.</div>{% endif %}
+<form action="/ag/{{ ag.id }}/exit" method="post" style="margin-bottom:1.4rem">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button class="button button-secondary" type="submit">Quitter cette AG</button>
+</form>
+<section class="card panel">
+<div class="panel-top"><h2>Les sujets de vote</h2><span class="muted">{{ polls|length }} sujet{% if polls|length != 1 %}s{% endif %}</span></div>
+{% if polls %}
+<div class="poll-list">
+{% for poll in polls %}
+<a class="poll-row" href="/ag/{{ ag.id }}/vote/{{ poll.id }}">
+<span class="poll-main"><strong>{{ poll.title }}</strong>
+<small>{% if poll.deja_vote %}✓ Déjà voté{% elif poll.phase == 'open' %}Vote ouvert{% elif poll.phase == 'upcoming' %}À venir{% else %}Terminé · résultats disponibles{% endif %}</small></span>
+<span class="arrow">→</span>
+</a>
+{% endfor %}
+</div>
+{% else %}<p class="muted">Il n'y a pas encore de sujets dans cette AG.</p>{% endif %}
+</section>
+</section>
+{% endblock %}

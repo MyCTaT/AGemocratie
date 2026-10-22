@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Code personnel généré{% endblock %}
+{% block content %}
+<div class="center-narrow vote-layout">
+<a class="back-link" href="/admin/ags/{{ ag.id }}">← Gestion de l'AG</a>
+<div class="eyebrow">{{ ag.title }}</div><h1>Code généré<span class="accent">.</span></h1>
+<section class="card access-card">
+<h2>Remettre ce code au participant</h2>
+<p class="notice" style="font-size:1.8rem;text-align:center;letter-spacing:.16rem;overflow-wrap:anywhere"><strong>{{ code }}</strong></p>
+<p class="muted">Ce code est affiché uniquement sur cette page : notez-le maintenant et transmettez-le de manière privée. Il ne sera pas conservé en clair dans D1.</p>
+<p>Ce code ouvre tous les sujets de <strong>{{ ag.title }}</strong>. Il autorise un vote par sujet.</p>
+<a class="button button-primary full" href="/admin/ags/{{ ag.id }}">Terminer</a>
+</section></div>
+{% endblock %}

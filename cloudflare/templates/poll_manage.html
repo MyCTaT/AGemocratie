@@ -2,8 +2,8 @@
 {% block title %}Gestion du vote{% endblock %}
 {% block content %}
 <div class="inner-page">
-  <a class="back-link" href="/admin">← Retour au tableau de bord</a>
-  <div class="eyebrow">Vote n° {{ poll.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% else %}Terminé{% endif %}</div>
+  <a class="back-link" href="/admin/ags/{{ ag.id }}">← Retour à {{ ag.title }}</a>
+  <div class="eyebrow">Sujet de {{ ag.title }} · Vote n° {{ poll.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% else %}Terminé{% endif %}</div>
   <h1>{{ poll.title }}<span class="accent">.</span></h1>
   {% if poll.description %}<p class="subtitle">{{ poll.description }}</p>{% endif %}
   {% if created %}<div class="notice" role="status">Scrutin créé. Tu peux gérer les dates ci-dessous.</div>{% endif %}
@@ -29,9 +29,17 @@
       {% for option in options %}<div class="poll-row"><span class="poll-main"><strong>{{ option.intitule }}</strong></span></div>{% endfor %}
     </div>{% else %}<p class="muted">Aucune proposition.</p>{% endif %}
   </section>
+  {% if resultats is not none %}
   <section class="card panel">
-    <h2>Codes d'accès et votes</h2>
-    <div class="notice">La génération de codes et le vote en ligne restent désactivés pendant la migration sécurisée. Aucun résultat de scrutin en cours n'est affiché.</div>
+    <h2>Résultats du sujet clôturé</h2>
+    {% for ligne in resultats %}
+    <div class="poll-row"><span class="poll-main"><strong>{{ ligne.intitule }}</strong></span><span class="poll-count">{{ ligne.total }} voix</span></div>
+    {% endfor %}
+  </section>
+  {% endif %}
+  <section class="card panel">
+    <h2>Vote des participants</h2>
+    <div class="notice">Les codes sont générés au niveau de l’AG. <a href="/admin/ags/{{ ag.id }}">Gérer les codes et les sujets de cette AG</a>. Les résultats publics sont visibles une fois le sujet clôturé.</div>
     {% if phase != 'ended' %}
       <form action="/admin/polls/{{ poll.id }}/close" method="post" class="form-stack">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

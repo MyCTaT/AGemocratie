@@ -1,47 +1,31 @@
 {% extends 'base.html' %}
-{% block title %}Tous les sujets de vote{% endblock %}
+{% block title %}Assemblées générales{% endblock %}
 {% block content %}
 <section class="hero center-wide">
   <div class="eyebrow"><span class="status-dot"></span> Plateforme de participation</div>
-  <h1>Choisissez votre sujet<span class="accent">.</span></h1>
-  <p class="subtitle">Sélectionnez un vote en cours, puis saisissez le code personnel correspondant à ce sujet.</p>
+  <h1>Vos assemblées générales<span class="accent">.</span></h1>
+  <p class="subtitle">Sélectionnez votre AG, saisissez votre code personnel une seule fois, puis votez sur ses différents sujets.</p>
 </section>
-{% if success %}
-<div class="notice center-wide" role="status"><strong>Votre vote a été enregistré !</strong> Vous pouvez participer à un autre sujet si vous possédez un autre code.</div>
+<section class="center-wide" aria-label="Assemblées générales">
+{% if ags %}
+<div class="public-poll-grid">
+{% for ag in ags %}
+  <article class="card public-poll">
+    <div class="public-poll-header"><span class="public-status public-status-open">Assemblée générale</span></div>
+    <h2>{{ ag.title }}</h2>
+    {% if ag.description %}<p class="muted">{{ ag.description }}</p>{% endif %}
+    <p class="public-period">{{ ag.total_sujets }} sujet{% if ag.total_sujets != 1 %}s{% endif %} de vote</p>
+    <a class="button button-primary full" href="/ag/{{ ag.id }}">Accéder avec mon code →</a>
+  </article>
+{% endfor %}
+</div>
+{% else %}
+<div class="card panel public-empty"><h2>Aucune AG pour le moment</h2><p class="muted">Les assemblées générales créées par les administrateurs apparaîtront ici.</p></div>
 {% endif %}
-<section class="center-wide" aria-label="Liste des sujets">
-  {% if polls %}
-    <div class="public-poll-grid">
-    {% for poll in polls %}
-      <article class="card public-poll">
-        <div class="public-poll-header">
-          <span class="public-status public-status-{{ poll.phase }}">
-            {% if poll.phase == 'open' %}En cours{% elif poll.phase == 'upcoming' %}À venir{% else %}Terminé{% endif %}
-          </span>
-        </div>
-        <h2>{{ poll.title }}</h2>
-        {% if poll.description %}<p class="muted">{{ poll.description }}</p>{% endif %}
-        <p class="public-period">
-          {% if poll.starts_at %}Du {{ poll.starts_at|local_date }}{% else %}Début non précisé{% endif %}
-          {% if poll.ends_at %}<br>Au {{ poll.ends_at|local_date }}{% endif %}
-        </p>
-        {% if poll.phase == 'open' %}
-          <a class="button button-primary full" href="/polls/{{ poll.id }}">Choisir ce sujet →</a>
-        {% elif poll.phase == 'upcoming' %}
-          <span class="button button-secondary full public-disabled" aria-disabled="true">Ouverture prochaine</span>
-        {% else %}
-          <span class="button button-secondary full public-disabled" aria-disabled="true">Vote terminé</span>
-        {% endif %}
-      </article>
-    {% endfor %}
-    </div>
-  {% else %}
-    <div class="card panel public-empty"><h2>Aucun sujet disponible</h2><p class="muted">L'administrateur n'a pas encore créé de vote.</p></div>
-  {% endif %}
 </section>
-<section class="feature-row center-wide" aria-label="Comment ça fonctionne">
-  <div class="feature"><span class="feature-number">01</span><strong>Choisissez un sujet</strong><p>Parmi les consultations affichées.</p></div>
-  <div class="feature"><span class="feature-number">02</span><strong>Entrez son code</strong><p>Un code unique pour ce sujet précis.</p></div>
-  <div class="feature"><span class="feature-number">03</span><strong>Votez</strong><p>Votre choix est enregistré une seule fois.</p></div>
+<section class="feature-row center-wide" aria-label="Comment participer">
+  <div class="feature"><span class="feature-number">01</span><strong>Choisissez votre AG</strong><p>Parmi les assemblées affichées.</p></div>
+  <div class="feature"><span class="feature-number">02</span><strong>Entrez votre code</strong><p>Un code personnel valable pour tous les sujets de cette AG.</p></div>
+  <div class="feature"><span class="feature-number">03</span><strong>Votez par sujet</strong><p>Une voix par sujet, sans redemander de code.</p></div>
 </section>
 {% endblock %}

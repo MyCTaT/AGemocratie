@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Gérer {{ ag.title }}{% endblock %}
+{% block content %}
+<div class="inner-page">
+<a class="back-link" href="/admin">← Toutes les AG</a>
+<div class="eyebrow">Gestion de l'assemblée générale</div><h1>{{ ag.title }}<span class="accent">.</span></h1>
+{% if ag.description %}<p class="subtitle">{{ ag.description }}</p>{% endif %}
+{% if created %}<div class="notice" role="status">AG créée. Ajoutez des sujets de vote et générez un code par participant.</div>{% endif %}
+<section class="card panel">
+<div class="panel-top"><h2>Sujets de cette AG</h2><span class="muted">{{ polls|length }} sujet{% if polls|length != 1 %}s{% endif %}</span></div>
+{% if polls %}<div class="poll-list">{% for poll in polls %}
+<a class="poll-row" href="/admin/polls/{{ poll.id }}"><span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'open' %}En cours{% elif poll.phase == 'upcoming' %}À venir{% else %}Terminé{% endif %}</small></span><span class="arrow">→</span></a>
+{% endfor %}</div>{% else %}<p class="muted">Aucun sujet pour le moment.</p>{% endif %}
+<p style="margin-top:1rem"><a class="button button-primary" href="/admin/polls/new?ag_id={{ ag.id }}">+ Ajouter un sujet</a></p>
+</section>
+<section class="card panel">
+<h2>Codes d'accès à l'AG</h2>
+<p><strong>{{ total_codes }} code{% if total_codes != 1 %}s{% endif %}</strong> généré{% if total_codes != 1 %}s{% endif %}.</p>
+<p class="muted">Générez un code personnel par participant. Chaque code sert pour tous les sujets de cette AG, une seule voix par sujet. Le code est affiché une seule fois.</p>
+<form action="/admin/ags/{{ ag.id }}/codes" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<button class="button button-secondary" type="submit">+ Générer un code personnel</button>
+</form>
+</section>
+<a class="button button-secondary" href="/ag/{{ ag.id }}">Voir la page publique de l'AG</a>
+{% if is_owner %}
+<section class="card panel" style="margin-top:1.5rem">
+<h2>Supprimer cette AG</h2><p class="muted">Attention : suppression irréversible de tous ses sujets, votes et codes.</p>
+<form action="/admin/ags/{{ ag.id }}/delete" method="post" class="form-stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="confirmation_titre">Recopier exactement : <strong>{{ ag.title }}</strong></label>
+<input id="confirmation_titre" name="confirmation_titre" required autocomplete="off">
+<button class="button button-danger" type="submit">Supprimer définitivement l'AG</button>
+</form>
+</section>
+{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Vote : {{ poll.title }}{% endblock %}
+{% block content %}
+<div class="center-narrow vote-layout">
+<a class="back-link" href="/ag/{{ ag.id }}">← Tous les sujets de cette AG</a>
+<div class="eyebrow">{{ ag.title }}</div>
+<h1 class="vote-title">{{ poll.title }}</h1>
+{% if poll.description %}<p class="subtitle">{{ poll.description }}</p>{% endif %}
+<section class="card access-card">
+{% if poll.phase == 'ended' %}
+<h2>Résultats définitifs</h2>
+<p class="muted">Ce vote est clôturé.</p>
+{% for option in resultats %}
+<div class="poll-row"><span class="poll-main"><strong>{{ option.intitule }}</strong></span><span class="poll-count">{{ option.total }} voix</span></div>
+{% endfor %}
+{% elif deja_vote %}
+<h2>Vote enregistré</h2>
+<div class="notice">Vous avez déjà voté sur ce sujet. Vous pouvez voter sur les autres.</div>
+{% elif poll.phase == 'upcoming' %}
+<h2>Vote à venir</h2><p>Ouverture : {{ poll.starts_at|local_date }}.</p>
+{% else %}
+<h2>Votre choix</h2>
+<p class="muted">Vous pouvez voter une seule fois sur ce sujet. Votre choix ne peut pas être modifié.</p>
+<form class="form-stack" action="/ag/{{ ag.id }}/vote/{{ poll.id }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% for option in options %}
+  <label style="display:flex;align-items:center;gap:.65rem"><input type="radio" name="option_id" value="{{ option.id }}" required> {{ option.intitule }}</label>
+  {% endfor %}
+  <button class="button button-primary full" type="submit">Enregistrer mon vote →</button>
+</form>
+{% endif %}
+</section>
+</div>
+{% endblock %}
