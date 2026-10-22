@@ -299,7 +299,7 @@ async def _verifie_mdp(mot_de_passe: str, valeur: str):
     from pyodide.ffi import to_js
     encoder = TextEncoder.new()
     cle = await crypto.subtle.importKey("raw", encoder.encode(mot_de_passe),
-                                       "PBKDF2", False, ["deriveBits"])
+                                       "PBKDF2", False, to_js(["deriveBits"]))
     algorithme = to_js({"name": "PBKDF2", "hash": "SHA-256",
                       "salt": to_js(sel), "iterations": n},
                       dict_converter=Object.fromEntries)
@@ -314,7 +314,7 @@ async def _hash_mdp(mot_de_passe):
     from pyodide.ffi import to_js
     sel = secrets.token_bytes(16)
     cle = await crypto.subtle.importKey("raw", TextEncoder.new().encode(mot_de_passe),
-                                       "PBKDF2", False, ["deriveBits"])
+                                       "PBKDF2", False, to_js(["deriveBits"]))
     options = to_js({"name": "PBKDF2", "hash": "SHA-256",
                      "salt": to_js(sel), "iterations": 390_000},
                      dict_converter=Object.fromEntries)
