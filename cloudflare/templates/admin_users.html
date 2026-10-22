@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Comptes administrateurs{% endblock %}
+{% block content %}
+<div class="inner-page">
+  <a class="back-link" href="/admin">← Tableau de bord</a>
+  <h1>Administrateurs<span class="accent">.</span></h1>
+  <p class="subtitle">Chaque personne possède son identifiant et son mot de passe. Tous les administrateurs gèrent les mêmes sujets.</p>
+  {% if created %}<div class="notice" role="status">Compte créé.</div>{% endif %}
+  {% if removed %}<div class="notice" role="status">Compte supprimé. Ses sessions ne sont plus valides.</div>{% endif %}
+  {% if changed %}<div class="notice" role="status">Mot de passe modifié. Les anciennes sessions de ce compte ont été invalidées.</div>{% endif %}
+  <section class="card panel">
+    <h2>Créer un administrateur</h2>
+    <form action="/admin/users/create" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="username">Identifiant (3 à 32 lettres/chiffres, _ ou -)</label>
+      <input type="text" id="username" name="username" pattern="[A-Za-z0-9_-]{3,32}" minlength="3" maxlength="32" required autocomplete="off">
+      <label for="password">Mot de passe (au moins 12 caractères)</label>
+      <input type="password" id="password" name="password" minlength="12" maxlength="256" required autocomplete="new-password">
+      <button class="button button-primary" type="submit">+ Créer le compte</button>
+    </form>
+  </section>
+  <section class="card panel">
+    <h2>Comptes existants</h2>
+    {% for person in users %}
+      <div style="margin-bottom:1.5rem; padding-bottom:1.25rem; border-bottom:1px solid #aaa5;">
+        <h3>{{ person.username }} {% if person.role == 'owner' %}— Principal{% else %}— Administrateur{% endif %}</h3>
+        <form action="/admin/users/{{ person.id }}/password" method="post" class="form-stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="password-{{ person.id }}">Remplacer son mot de passe</label>
+          <input type="password" id="password-{{ person.id }}" name="password" minlength="12" maxlength="256" required autocomplete="new-password">
+          <button type="submit" class="button button-secondary">Changer le mot de passe</button>
+        </form>
+        {% if person.role != 'owner' %}
+          <form action="/admin/users/{{ person.id }}/delete" method="post" class="form-stack" style="margin-top:1rem">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="confirm-{{ person.id }}">Pour supprimer ce compte, recopier : <strong>{{ person.username }}</strong></label>
+            <input type="text" id="confirm-{{ person.id }}" name="confirmation_identifiant" required autocomplete="off">
+            <button type="submit" class="button button-danger">Supprimer cet administrateur</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}
