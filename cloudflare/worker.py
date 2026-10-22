@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from workers import asgi
+from workers import asgi, env as cloudflare_env
 
 DOSSIER = Path(__file__).resolve().parent
 PARIS = ZoneInfo("Europe/Paris")
@@ -90,14 +90,19 @@ def _bdd(requete):
 
 
 def _secret(requete):
-    environnement = requete.scope.get("env")
-    cle = getattr(environnement, "APP_SECRET_KEY", "") if environnement else ""
-    if not isinstance(cle, str):
-        cle = str(cle)
-    if len(cle) < 32:
-        raise HTTPException(503, detail="Le secret APP_SECRET_KEY n'est pas configuré")
-    return cle.encode("utf-8")
-
+    # Le binding global est documenté par Cloudflare pour les Python Workers.
+    # Le binding ASGI reste disponible en secours selon le contexte d'exécution.
+    for environnement in (cloudflare_env, requete.scope.get("env")):
+        if environnement is None:
+            continue
+        cle = getattr(environnement, "APP_SECRET_KEY", None)
+        if cle is None:
+            continue
+        if hasattr(cle, "to_py"):
+            cle = cle.to_py()
+        if isinstance(cle, str) and len(cle) >= 32:
+            return cle.encode("utf-8")
+    raise HTTPException(503, detail="APP_SECRET_KEY inaccessible ou trop court dans le Worker")
 
 def _objet(ligne):
     if ligne is None:
