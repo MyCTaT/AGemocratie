@@ -23,9 +23,15 @@
 <p class="muted">Vous pouvez voter une seule fois sur ce sujet. Votre choix ne peut pas être modifié.</p>
 <form class="form-stack" action="/ag/{{ ag.id }}/vote/{{ poll.id }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  {% for option in options %}
-  <label style="display:flex;align-items:center;gap:.65rem"><input type="radio" name="option_id" value="{{ option.id }}" required> {{ option.intitule }}</label>
-  {% endfor %}
+  <div class="choices">
+    {% for option in options %}
+    <label class="choice">
+      <input type="radio" name="option_id" value="{{ option.id }}" required>
+      <span class="choice-label">{{ option.intitule }}</span>
+      <span class="choice-check" aria-hidden="true">✓</span>
+    </label>
+    {% endfor %}
+  </div>
   <button class="button button-primary full" type="submit">Enregistrer mon vote →</button>
 </form>
 {% endif %}
