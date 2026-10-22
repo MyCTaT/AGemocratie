@@ -17,3 +17,8 @@
 .public-disabled{opacity:.65;pointer-events:none;cursor:not-allowed}
 .public-empty{text-align:center;padding:32px}
 @media(max-width:650px){.public-poll-grid{grid-template-columns:1fr}.public-poll{padding:22px}}
+.ag-code-bar{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:24px}
+.ag-code-bar p{margin:0;font-size:14px}
+.ag-polls{margin-top:24px}
+.ag-polls .poll-row .button{white-space:nowrap}
+@media(max-width:650px){.ag-code-bar{flex-direction:column;align-items:stretch}}

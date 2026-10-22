@@ -2,11 +2,11 @@
 {% block title %}Gestion du vote{% endblock %}
 {% block content %}
 <div class="inner-page">
-  <a class="back-link" href="/admin">← Retour au tableau de bord</a>
-  <div class="eyebrow">Vote n° {{ poll.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% else %}Terminé{% endif %}</div>
+  <a class="back-link" href="/admin/ag/{{ assembly.id }}">← Retour à l'AG « {{ assembly.title }} »</a>
+  <div class="eyebrow">Sujet n° {{ poll.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% else %}Terminé{% endif %}</div>
   <h1>{{ poll.title }}<span class="accent">.</span></h1>
   {% if poll.description %}<p class="subtitle">{{ poll.description }}</p>{% endif %}
-  {% if created %}<div class="notice" role="status">Vote créé ! Vous pouvez générer les codes.</div>{% endif %}
+  {% if created %}<div class="notice" role="status">Sujet créé ! Les codes déjà distribués pour cette AG y donnent accès.</div>{% endif %}
   {% if closed %}<div class="notice" role="status">Vote clôturé manuellement.</div>{% endif %}
   {% if schedule_saved %}<div class="notice" role="status">Dates enregistrées.</div>{% endif %}
   <section class="card panel">
@@ -25,7 +25,7 @@
     {% endif %}
   </section>
   <div class="stats-grid">
-    <div class="stat card"><span>Codes générés</span><strong>{{ stats.total_codes }}</strong></div>
+    <div class="stat card"><span>Codes de l'AG</span><strong>{{ total_codes }}</strong></div>
     <div class="stat card"><span>Participation</span><strong>{% if show_results %}{{ total_votes }}{% else %}Masquée jusqu'à la fin{% endif %}</strong></div>
   </div>
   <div class="admin-grid">
@@ -40,31 +40,21 @@
         <div class="notice">Les résultats sont cachés jusqu'à l'heure de fin ou la clôture manuelle.</div>
       {% endif %}
     </section>
-    <section class="card panel"><h2>Codes d'accès</h2>
+    <section class="card panel"><h2>Clôture anticipée</h2>
       {% if phase != 'ended' %}
-        <p class="muted">Un clic = un code. Les codes peuvent être distribués avant l'ouverture du vote.</p>
-        {% if generated_code %}
-          <div class="notice" role="status"><h3>Votre nouveau code :</h3><h2>{{ generated_code }}</h2><p>Copiez-le maintenant, il ne sera plus affiché après un rafraîchissement.</p></div>
-        {% endif %}
-        <form method="post" action="/admin/polls/{{ poll.id }}/codes" class="form-stack">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="button button-primary full" type="submit">+ Générer un code</button>
-        </form>
-        <div class="divider"></div>
-        <h3>Clôture anticipée</h3>
-        <p class="muted">La clôture est définitive et rend immédiatement visibles les résultats.</p>
+        <p class="muted">La clôture est définitive et rend immédiatement visibles les résultats de ce sujet.</p>
         <form method="post" action="/admin/polls/{{ poll.id }}/close">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="button button-danger" type="submit">Clôturer le vote</button>
+          <button class="button button-danger" type="submit">Clôturer ce sujet</button>
         </form>
       {% else %}
-        <div class="notice">Vote terminé : aucun nouveau code ne peut être généré ou utilisé.</div>
+        <div class="notice">Vote terminé : plus aucun bulletin ne peut être déposé sur ce sujet.</div>
       {% endif %}
     </section>
   </div>
   <section class="card panel">
     <h2>Supprimer ce sujet</h2>
-    <p class="muted">Attention : cette opération est définitive. Tous les codes, les réponses possibles et les bulletins de ce sujet seront supprimés. Les autres sujets ne changent pas.</p>
+    <p class="muted">Attention : cette opération est définitive. Les réponses possibles et les bulletins de ce sujet seront supprimés. Les codes de l'AG et ses autres sujets ne changent pas.</p>
     <form action="/admin/polls/{{ poll.id }}/delete" method="post" class="form-stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label for="confirm_title">Pour confirmer, recopiez exactement ce titre : <strong>{{ poll.title }}</strong></label>

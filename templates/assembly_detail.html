@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Gestion de l'AG{% endblock %}
+{% block content %}
+<div class="inner-page">
+  <a class="back-link" href="/admin">← Retour au tableau de bord</a>
+  <div class="eyebrow">AG n° {{ assembly.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% else %}Terminée{% endif %}</div>
+  <h1>{{ assembly.title }}<span class="accent">.</span></h1>
+  {% if assembly.description %}<p class="subtitle">{{ assembly.description }}</p>{% endif %}
+  {% if created %}<div class="notice" role="status">AG créée ! Ajoutez ses sujets et générez les codes des membres.</div>{% endif %}
+  {% if deleted %}<div class="notice" role="status">Le sujet et ses bulletins ont été supprimés.</div>{% endif %}
+  <div class="stats-grid">
+    <div class="stat card"><span>Sujets</span><strong>{{ polls|length }}</strong></div>
+    <div class="stat card"><span>Codes générés</span><strong>{{ total_codes }}</strong></div>
+  </div>
+  <div class="admin-grid">
+    <section class="card panel">
+      <div class="panel-top"><h2>Sujets de vote</h2><a class="button button-secondary" href="/admin/ag/{{ assembly.id }}/polls/new">+ Ajouter un sujet</a></div>
+      {% if polls %}
+      <div class="poll-list">
+        {% for poll in polls %}
+        <a class="poll-row" href="/admin/polls/{{ poll.id }}">
+          <span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'open' %}<span class="mini-dot"></span> En cours{% else %}Terminé{% endif %} · {{ poll.starts_at|local_date }} → {{ poll.ends_at|local_date }}</small></span>
+          <span class="poll-count">{% if poll.phase == 'ended' %}{{ poll.total_votes }} vote{% if poll.total_votes != 1 %}s{% endif %}{% else %}Résultats masqués{% endif %}</span><span class="arrow">→</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted">Aucun sujet pour l'instant.</p>
+      {% endif %}
+    </section>
+    <section class="card panel"><h2>Codes des membres</h2>
+      {% if phase != 'ended' %}
+        <p class="muted">Un clic = un code. Chaque code donne une voix sur <strong>chaque sujet</strong> de l'AG, y compris les sujets ajoutés plus tard.</p>
+        {% if generated_code %}
+          <div class="notice" role="status"><h3>Votre nouveau code :</h3><h2>{{ generated_code }}</h2><p>Copiez-le maintenant, il ne sera plus affiché après un rafraîchissement.</p></div>
+        {% endif %}
+        <form method="post" action="/admin/ag/{{ assembly.id }}/codes" class="form-stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button button-primary full" type="submit">+ Générer un code</button>
+        </form>
+      {% else %}
+        <div class="notice">Tous les votes de cette AG sont terminés : aucun nouveau code ne peut être généré.</div>
+      {% endif %}
+    </section>
+  </div>
+  <section class="card panel">
+    <h2>Supprimer cette AG</h2>
+    <p class="muted">Attention : cette opération est définitive. Tous les sujets, codes et bulletins de cette AG seront supprimés. Les autres AG ne changent pas.</p>
+    <form action="/admin/ag/{{ assembly.id }}/delete" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="confirm_title">Pour confirmer, recopiez exactement ce nom : <strong>{{ assembly.title }}</strong></label>
+      <input id="confirm_title" type="text" name="confirmation_titre" autocomplete="off" required>
+      <button type="submit" class="button button-danger">Supprimer définitivement cette AG</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

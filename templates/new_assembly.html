@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Créer une AG{% endblock %}
+{% block content %}
+<div class="center-wide inner-page">
+  <a class="back-link" href="/admin">← Retour au tableau de bord</a>
+  <div class="eyebrow">Nouvelle assemblée</div><h1>Créer une AG<span class="accent">.</span></h1>
+  <p class="subtitle">Une AG regroupe plusieurs sujets de vote. Chaque membre reçoit un seul code pour toute l'AG.</p>
+  <section class="card form-card">
+    {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+    <form class="form-stack" action="/admin/ag/new" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="title">Nom de l'AG</label>
+      <input type="text" name="title" id="title" minlength="3" maxlength="140" value="{{ title_value|default('') }}" required placeholder="Ex. AG ordinaire de juin 2026">
+      <label for="description">Description <span class="muted">(facultative)</span></label>
+      <textarea id="description" name="description" rows="3" maxlength="600" placeholder="Ordre du jour, lieu, informations pratiques...">{{ description_value|default('') }}</textarea>
+      <button class="button button-primary" type="submit">Créer cette AG <span aria-hidden="true">→</span></button>
+    </form>
+  </section>
+</div>
+{% endblock %}

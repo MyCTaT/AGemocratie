@@ -2,7 +2,7 @@
 {% block title %}Exprimer mon choix{% endblock %}
 {% block content %}
 <div class="center-narrow vote-layout">
-  <a class="back-link" href="/">← Accueil</a>
+  <a class="back-link" href="/ag/{{ poll.assembly_id }}">← Sujets de l'AG</a>
   <div class="eyebrow"><span class="status-dot"></span> Vote en cours</div>
   <h1 class="vote-title">{{ poll.title }}</h1>
   {% if poll.description %}<p class="subtitle">{{ poll.description }}</p>{% endif %}
@@ -10,7 +10,7 @@
     <h2>Choisissez une réponse</h2>
     <p class="muted">Une seule proposition peut être sélectionnée.</p>
     {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
-    <form action="/vote" method="post" class="form-stack">
+    <form action="/vote/{{ poll.id }}" method="post" class="form-stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="choices">
         {% for option in options %}

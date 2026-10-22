@@ -67,6 +67,12 @@ def init_db():
         bdd.execute("PRAGMA journal_mode = WAL")
         bdd.executescript(
             """
+            CREATE TABLE IF NOT EXISTS assemblies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS polls (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -80,14 +86,20 @@ def init_db():
                 label TEXT NOT NULL,
                 position INTEGER NOT NULL
             );
-            CREATE TABLE IF NOT EXISTS access_codes (
+            CREATE TABLE IF NOT EXISTS assembly_codes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                poll_id INTEGER NOT NULL REFERENCES polls(id),
+                assembly_id INTEGER NOT NULL REFERENCES assemblies(id),
                 code_hash TEXT NOT NULL UNIQUE,
-                used_at INTEGER,
                 created_at INTEGER NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS codes_by_poll ON access_codes(poll_id);
+            CREATE INDEX IF NOT EXISTS codes_by_assembly ON assembly_codes(assembly_id);
+            -- Un code a voté sur tel sujet ; sans horodatage ni ordre d'insertion,
+            -- pour ne pas pouvoir rapprocher un code de son bulletin.
+            CREATE TABLE IF NOT EXISTS code_uses (
+                code_id INTEGER NOT NULL REFERENCES assembly_codes(id),
+                poll_id INTEGER NOT NULL REFERENCES polls(id),
+                PRIMARY KEY (code_id, poll_id)
+            ) WITHOUT ROWID;
             CREATE TABLE IF NOT EXISTS ballots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 poll_id INTEGER NOT NULL REFERENCES polls(id),
@@ -107,6 +119,64 @@ def init_db():
             bdd.execute("ALTER TABLE polls ADD COLUMN starts_at INTEGER")
         if "ends_at" not in colonnes:
             bdd.execute("ALTER TABLE polls ADD COLUMN ends_at INTEGER")
+        if "assembly_id" not in colonnes:
+            bdd.execute("ALTER TABLE polls ADD COLUMN assembly_id INTEGER REFERENCES assemblies(id)")
+        bdd.execute("CREATE INDEX IF NOT EXISTS polls_by_assembly ON polls(assembly_id)")
+    migrate_to_assemblies()
+
+
+def migrate_to_assemblies():
+    """Reprend les données de l'ancienne version (un code par sujet) sans rien perdre.
+
+    Chaque ancien sujet devient une AG contenant ce seul sujet ; ses codes, déjà
+    distribués, restent valables. Une copie de la base est faite avant la migration.
+    """
+    with connect_db() as bdd:
+        ancienne_table = bdd.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='access_codes'"
+        ).fetchone() is not None
+        sujets_orphelins = bdd.execute("SELECT COUNT(*) FROM polls WHERE assembly_id IS NULL").fetchone()[0]
+        if not ancienne_table and sujets_orphelins == 0:
+            return
+        sauvegarde_base(bdd, "avant-migration-ag")
+        bdd.execute("BEGIN IMMEDIATE")
+        try:
+            for sujet in bdd.execute(
+                "SELECT id,title,description,created_at FROM polls WHERE assembly_id IS NULL"
+            ).fetchall():
+                id_assemblee = bdd.execute(
+                    "INSERT INTO assemblies (title,description,created_at) VALUES (?,?,?)",
+                    (sujet["title"], sujet["description"], sujet["created_at"]),
+                ).lastrowid
+                bdd.execute("UPDATE polls SET assembly_id=? WHERE id=?", (id_assemblee, sujet["id"]))
+            if ancienne_table:
+                bdd.execute(
+                    """INSERT INTO assembly_codes (id,assembly_id,code_hash,created_at)
+                       SELECT c.id, p.assembly_id, c.code_hash, c.created_at
+                       FROM access_codes c JOIN polls p ON p.id=c.poll_id"""
+                )
+                bdd.execute(
+                    "INSERT INTO code_uses (code_id,poll_id) "
+                    "SELECT id, poll_id FROM access_codes WHERE used_at IS NOT NULL"
+                )
+                bdd.execute("DROP TABLE access_codes")
+            bdd.execute("COMMIT")
+        except Exception:
+            if bdd.in_transaction:
+                bdd.execute("ROLLBACK")
+            raise
+
+
+def sauvegarde_base(bdd: sqlite3.Connection, motif: str) -> Path:
+    """Copie cohérente de la base, à côté du fichier d'origine."""
+    horodatage = datetime.now(ZoneInfo("Europe/Paris")).strftime("%Y%m%d-%H%M%S")
+    chemin = CHEMIN_BASE_DONNEES.with_name(f"{CHEMIN_BASE_DONNEES.stem}.{motif}.{horodatage}.bak")
+    copie = sqlite3.connect(chemin)
+    try:
+        bdd.backup(copie)
+    finally:
+        copie.close()
+    return chemin
 
 
 init_db()
@@ -224,6 +294,16 @@ def poll_phase(sujet, instant: int | None = None) -> str:
     return "open"
 
 
+def assembly_phase(sujets) -> str:
+    """En cours si au moins un sujet est ouvert, à venir s'il en reste un à ouvrir."""
+    phases = {poll_phase(sujet) for sujet in sujets}
+    if "open" in phases:
+        return "open"
+    if "upcoming" in phases or not phases:
+        return "upcoming"
+    return "ended"
+
+
 def schedule_from_form(formulaire):
     debut = read_local_date(str(formulaire.get("starts_at", "")))
     fin = read_local_date(str(formulaire.get("ends_at", "")))
@@ -321,128 +401,148 @@ async def health():
 @app.get("/")
 async def home(requete: Request):
     with connect_db() as bdd:
-        lignes = bdd.execute(
-            "SELECT id,title,description,is_open,starts_at,ends_at "
-            "FROM polls ORDER BY id DESC"
+        assemblees = [dict(ligne) for ligne in bdd.execute(
+            "SELECT id,title,description FROM assemblies ORDER BY id DESC"
+        )]
+        sujets = bdd.execute(
+            "SELECT id,assembly_id,is_open,starts_at,ends_at FROM polls"
         ).fetchall()
-    sujets = [{**dict(ligne), "phase": poll_phase(ligne)} for ligne in lignes]
+    for assemblee in assemblees:
+        siens = [sujet for sujet in sujets if sujet["assembly_id"] == assemblee["id"]]
+        debuts = [sujet["starts_at"] for sujet in siens if sujet["starts_at"] is not None]
+        fins = [sujet["ends_at"] for sujet in siens if sujet["ends_at"] is not None]
+        assemblee.update(phase=assembly_phase(siens), total_polls=len(siens),
+                         starts_at=min(debuts, default=None), ends_at=max(fins, default=None))
     ordre = {"open": 0, "upcoming": 1, "ended": 2}
-    sujets.sort(key=lambda sujet: (ordre[sujet["phase"]], -sujet["id"]))
-    return render(requete, "home.html", polls=sujets,
-                  success=requete.query_params.get("done") == "1")
+    assemblees.sort(key=lambda assemblee: (ordre[assemblee["phase"]], -assemblee["id"]))
+    return render(requete, "home.html", assemblies=assemblees)
+
+
+def assembly_page_data(bdd, id_assemblee):
+    assemblee = bdd.execute(
+        "SELECT id,title,description FROM assemblies WHERE id=?", (id_assemblee,)
+    ).fetchone()
+    if assemblee is None:
+        raise HTTPException(status_code=404, detail="AG introuvable")
+    sujets = bdd.execute(
+        "SELECT id,title,description,is_open,starts_at,ends_at FROM polls "
+        "WHERE assembly_id=? ORDER BY starts_at, id", (id_assemblee,)
+    ).fetchall()
+    return assemblee, sujets
+
+
+def voter_code(bdd, requete: Request):
+    """Code saisi par le votant dans cette session, s'il existe encore."""
+    id_code = requete.session.get("voter_code_id")
+    if not isinstance(id_code, int):
+        return None
+    return bdd.execute("SELECT id,assembly_id FROM assembly_codes WHERE id=?", (id_code,)).fetchone()
+
+
+def render_assembly(requete: Request, bdd, id_assemblee, status_code=200, **contexte):
+    assemblee, sujets = assembly_page_data(bdd, id_assemblee)
+    code = voter_code(bdd, requete)
+    deja_votes = set()
+    if code is not None and code["assembly_id"] == id_assemblee:
+        deja_votes = {ligne["poll_id"] for ligne in bdd.execute(
+            "SELECT poll_id FROM code_uses WHERE code_id=?", (code["id"],))}
+    else:
+        code = None
+    liste = [{**dict(sujet), "phase": poll_phase(sujet), "voted": sujet["id"] in deja_votes}
+             for sujet in sujets]
+    return render(requete, "assembly.html", status_code=status_code, assembly=assemblee,
+                  polls=liste, phase=assembly_phase(sujets), has_code=code is not None,
+                  success=requete.query_params.get("done") == "1", **contexte)
+
+
+@app.get("/ag/{id_assemblee}")
+async def public_assembly(requete: Request, id_assemblee: int):
+    with connect_db() as bdd:
+        return render_assembly(requete, bdd, id_assemblee)
 
 
 @app.get("/polls/{id_sujet}")
-async def public_poll(requete: Request, id_sujet: int):
+async def public_poll(id_sujet: int):
+    """Anciens liens par sujet : renvoie vers l'AG correspondante."""
     with connect_db() as bdd:
-        sujet = bdd.execute(
-            "SELECT id,title,description,is_open,starts_at,ends_at "
-            "FROM polls WHERE id=?", (id_sujet,)
-        ).fetchone()
+        sujet = bdd.execute("SELECT assembly_id FROM polls WHERE id=?", (id_sujet,)).fetchone()
     if sujet is None:
         raise HTTPException(status_code=404, detail="Sujet introuvable")
-    return render(requete, "poll_access.html", poll=sujet, phase=poll_phase(sujet))
+    return redirect_to(f"/ag/{sujet['assembly_id']}")
 
 
-@app.post("/polls/{id_sujet}/access")
-async def access_selected_poll(requete: Request, id_sujet: int):
+@app.post("/ag/{id_assemblee}/access")
+async def access_assembly(requete: Request, id_assemblee: int):
     formulaire = await requete.form()
     csrf_check(requete, formulaire)
     code = str(formulaire.get("code", "")).strip()
     portee = scope_for(requete, "voter")
     with connect_db() as bdd:
-        sujet = bdd.execute(
-            "SELECT id,title,description,is_open,starts_at,ends_at "
-            "FROM polls WHERE id=?", (id_sujet,)
-        ).fetchone()
-        if sujet is None:
-            raise HTTPException(status_code=404, detail="Sujet introuvable")
-        etat = poll_phase(sujet)
-        if etat != "open":
-            return render(requete, "poll_access.html", status_code=409,
-                          poll=sujet, phase=etat,
-                          error="Ce sujet n'est pas ouvert au vote.")
+        _, sujets = assembly_page_data(bdd, id_assemblee)
+        if assembly_phase(sujets) != "open":
+            return render_assembly(requete, bdd, id_assemblee, status_code=409,
+                                   error="Aucun vote n'est ouvert dans cette AG.")
         if blocked(bdd, portee, 10):
-            return render(requete, "poll_access.html", status_code=429,
-                          poll=sujet, phase=etat,
-                          error="Trop de tentatives. Réessayez dans 15 minutes.")
+            return render_assembly(requete, bdd, id_assemblee, status_code=429,
+                                   error="Trop de tentatives. Réessayez dans 15 minutes.")
         ligne = None
         if len(code) == 10 and code.isascii() and code.isdigit():
             ligne = bdd.execute(
-                "SELECT id FROM access_codes "
-                "WHERE poll_id=? AND code_hash=? AND used_at IS NULL",
-                (id_sujet, code_digest(code)),
+                "SELECT id FROM assembly_codes WHERE assembly_id=? AND code_hash=?",
+                (id_assemblee, code_digest(code)),
             ).fetchone()
         if ligne is None:
             failed_attempt(bdd, portee)
-            return render(requete, "poll_access.html", status_code=400,
-                          poll=sujet, phase=etat,
-                          error="Code invalide, déjà utilisé ou destiné à un autre sujet.")
+            return render_assembly(requete, bdd, id_assemblee, status_code=400,
+                                   error="Code invalide ou destiné à une autre AG.")
         bdd.execute("DELETE FROM rate_limits WHERE scope=?", (portee,))
-    requete.session.pop("voter_code_id", None)
     requete.session["voter_code_id"] = ligne["id"]
-    return redirect_to("/vote")
+    return redirect_to(f"/ag/{id_assemblee}")
 
 
-@app.post("/access")
-async def access_vote(requete: Request):
+@app.post("/ag/leave")
+async def leave_assembly(requete: Request):
     formulaire = await requete.form()
     csrf_check(requete, formulaire)
-    code = str(formulaire.get("code", "")).strip()
-    portee = scope_for(requete, "voter")
-    with connect_db() as bdd:
-        if blocked(bdd, portee, 10):
-            return render(requete, "home.html", status_code=429,
-                          error="Trop de tentatives. Réessayez dans 15 minutes.", success=False)
-        ligne = None
-        if len(code) == 10 and code.isascii() and code.isdigit():
-            ligne = bdd.execute(
-                """SELECT c.id, p.is_open, p.starts_at, p.ends_at FROM access_codes c
-                   JOIN polls p ON p.id=c.poll_id
-                   WHERE c.code_hash=? AND c.used_at IS NULL""",
-                (code_digest(code),),
-            ).fetchone()
-        if ligne is None or poll_phase(ligne) != "open":
-            failed_attempt(bdd, portee)
-            return render(requete, "home.html", status_code=400,
-                          error="Code invalide, déjà utilisé ou vote indisponible à cette heure.", success=False)
-        bdd.execute("DELETE FROM rate_limits WHERE scope=?", (portee,))
     requete.session.pop("voter_code_id", None)
-    requete.session["voter_code_id"] = ligne["id"]
-    return redirect_to("/vote")
+    return redirect_to("/")
 
 
-def get_active_poll(bdd, id_code):
-    ligne = bdd.execute(
-        """SELECT p.id, p.title, p.description, p.is_open, p.starts_at, p.ends_at
-           FROM access_codes c JOIN polls p ON p.id=c.poll_id
-           WHERE c.id=? AND c.used_at IS NULL""",
-        (id_code,),
+def votable_poll(bdd, code, id_sujet):
+    """Le sujet si ce code peut encore y voter maintenant, sinon None."""
+    if code is None:
+        return None
+    sujet = bdd.execute(
+        "SELECT id,title,description,is_open,starts_at,ends_at,assembly_id FROM polls "
+        "WHERE id=? AND assembly_id=?", (id_sujet, code["assembly_id"]),
     ).fetchone()
-    return ligne if ligne is not None and poll_phase(ligne) == "open" else None
+    if sujet is None or poll_phase(sujet) != "open":
+        return None
+    if bdd.execute("SELECT 1 FROM code_uses WHERE code_id=? AND poll_id=?",
+                   (code["id"], id_sujet)).fetchone():
+        return None
+    return sujet
 
 
-@app.get("/vote")
-async def voting_page(requete: Request):
-    id_code = requete.session.get("voter_code_id")
-    if not id_code:
-        return redirect_to("/")
+def back_to_assembly(code):
+    return redirect_to(f"/ag/{code['assembly_id']}" if code is not None else "/")
+
+
+@app.get("/vote/{id_sujet}")
+async def voting_page(requete: Request, id_sujet: int):
     with connect_db() as bdd:
-        sujet = get_active_poll(bdd, id_code)
-        if not sujet:
-            requete.session.pop("voter_code_id", None)
-            return redirect_to("/")
+        code = voter_code(bdd, requete)
+        sujet = votable_poll(bdd, code, id_sujet)
+        if sujet is None:
+            return back_to_assembly(code)
         propositions = bdd.execute("SELECT id,label FROM poll_options WHERE poll_id=? ORDER BY position", (sujet["id"],)).fetchall()
     return render(requete, "vote.html", poll=sujet, options=propositions)
 
 
-@app.post("/vote")
-async def submit_vote(requete: Request):
+@app.post("/vote/{id_sujet}")
+async def submit_vote(requete: Request, id_sujet: int):
     formulaire = await requete.form()
     csrf_check(requete, formulaire)
-    id_code = requete.session.get("voter_code_id")
-    if not id_code:
-        return redirect_to("/")
     try:
         id_proposition = int(formulaire.get("option_id", ""))
     except (TypeError, ValueError):
@@ -451,11 +551,11 @@ async def submit_vote(requete: Request):
     with connect_db() as bdd:
         bdd.execute("BEGIN IMMEDIATE")
         try:
-            sujet = get_active_poll(bdd, id_code)
+            code = voter_code(bdd, requete)
+            sujet = votable_poll(bdd, code, id_sujet)
             if sujet is None:
                 bdd.execute("ROLLBACK")
-                requete.session.pop("voter_code_id", None)
-                return redirect_to("/")
+                return back_to_assembly(code)
             proposition = bdd.execute(
                 "SELECT id FROM poll_options WHERE id=? AND poll_id=?", (id_proposition, sujet["id"])
             ).fetchone()
@@ -464,23 +564,15 @@ async def submit_vote(requete: Request):
                 bdd.execute("ROLLBACK")
                 return render(requete, "vote.html", status_code=400, poll=sujet, options=propositions,
                               error="Sélectionnez une proposition avant de valider.")
-            instant = int(time.time())
-            mise_a_jour = bdd.execute(
-                "UPDATE access_codes SET used_at=? WHERE id=? AND used_at IS NULL", (instant, id_code)
-            )
-            if mise_a_jour.rowcount != 1:
-                bdd.execute("ROLLBACK")
-                requete.session.pop("voter_code_id", None)
-                return redirect_to("/")
+            bdd.execute("INSERT INTO code_uses (code_id,poll_id) VALUES (?,?)", (code["id"], sujet["id"]))
             bdd.execute("INSERT INTO ballots (poll_id,option_id,created_at) VALUES (?,?,?)",
-                       (sujet["id"], id_proposition, instant))
+                       (sujet["id"], id_proposition, int(time.time())))
             bdd.execute("COMMIT")
         except Exception:
             if bdd.in_transaction:
                 bdd.execute("ROLLBACK")
             raise
-    requete.session.pop("voter_code_id", None)
-    return redirect_to("/?done=1")
+    return redirect_to(f"/ag/{code['assembly_id']}?done=1")
 
 
 @app.get("/admin/login")
@@ -528,25 +620,154 @@ async def admin_dashboard(requete: Request):
     if acces_refuse := require_admin(requete):
         return acces_refuse
     with connect_db() as bdd:
-        lignes = bdd.execute(
-            """SELECT p.*,
-               (SELECT COUNT(*) FROM access_codes c WHERE c.poll_id=p.id) AS total_codes,
-               (SELECT COUNT(*) FROM ballots b WHERE b.poll_id=p.id) AS total_votes
-               FROM polls p ORDER BY p.id DESC"""
-        ).fetchall()
-    sujets = [{**dict(ligne), "phase": poll_phase(ligne)} for ligne in lignes]
-    return render(requete, "dashboard.html", polls=sujets)
+        assemblees = [dict(ligne) for ligne in bdd.execute(
+            """SELECT a.*,
+               (SELECT COUNT(*) FROM assembly_codes c WHERE c.assembly_id=a.id) AS total_codes
+               FROM assemblies a ORDER BY a.id DESC"""
+        )]
+        sujets = bdd.execute("SELECT assembly_id,is_open,starts_at,ends_at FROM polls").fetchall()
+    for assemblee in assemblees:
+        siens = [sujet for sujet in sujets if sujet["assembly_id"] == assemblee["id"]]
+        assemblee.update(phase=assembly_phase(siens), total_polls=len(siens))
+    return render(requete, "dashboard.html", assemblies=assemblees)
 
 
-@app.get("/admin/polls/new")
-async def create_poll_page(requete: Request):
+def assembly_form_valid(titre: str, description: str) -> bool:
+    return 3 <= len(titre) <= 140 and len(description) <= 600
+
+
+@app.get("/admin/ag/new")
+async def create_assembly_page(requete: Request):
     if acces_refuse := require_admin(requete):
         return acces_refuse
-    return render(requete, "new_poll.html")
+    return render(requete, "new_assembly.html")
 
 
-@app.post("/admin/polls/new")
-async def create_poll(requete: Request):
+@app.post("/admin/ag/new")
+async def create_assembly(requete: Request):
+    if acces_refuse := require_admin(requete):
+        return acces_refuse
+    formulaire = await requete.form()
+    csrf_check(requete, formulaire)
+    titre = str(formulaire.get("title", "")).strip()
+    description = str(formulaire.get("description", "")).strip()
+    if not assembly_form_valid(titre, description):
+        return render(requete, "new_assembly.html", status_code=400,
+                      title_value=titre, description_value=description,
+                      error="Le titre doit faire entre 3 et 140 caractères, la description 600 au plus.")
+    with connect_db() as bdd:
+        id_assemblee = bdd.execute(
+            "INSERT INTO assemblies (title,description,created_at) VALUES (?,?,?)",
+            (titre, description, int(time.time())),
+        ).lastrowid
+    return redirect_to(f"/admin/ag/{id_assemblee}?created=1")
+
+
+def admin_assembly_or_404(bdd, id_assemblee):
+    assemblee = bdd.execute("SELECT * FROM assemblies WHERE id=?", (id_assemblee,)).fetchone()
+    if assemblee is None:
+        raise HTTPException(status_code=404, detail="AG introuvable")
+    return assemblee
+
+
+@app.get("/admin/ag/{id_assemblee}")
+async def admin_assembly_detail(requete: Request, id_assemblee: int):
+    if acces_refuse := require_admin(requete):
+        return acces_refuse
+    with connect_db() as bdd:
+        assemblee = admin_assembly_or_404(bdd, id_assemblee)
+        total_codes = bdd.execute(
+            "SELECT COUNT(*) FROM assembly_codes WHERE assembly_id=?", (id_assemblee,)
+        ).fetchone()[0]
+        lignes = bdd.execute(
+            """SELECT p.*, (SELECT COUNT(*) FROM ballots b WHERE b.poll_id=p.id) AS total_votes
+               FROM polls p WHERE p.assembly_id=? ORDER BY p.starts_at, p.id""", (id_assemblee,)
+        ).fetchall()
+    sujets = [{**dict(ligne), "phase": poll_phase(ligne)} for ligne in lignes]
+    message_temporaire = requete.session.get("new_code")
+    code_genere = None
+    if isinstance(message_temporaire, dict) and message_temporaire.get("assembly_id") == id_assemblee:
+        code_genere = message_temporaire.get("code")
+        requete.session.pop("new_code", None)
+    return render(requete, "assembly_detail.html", assembly=assemblee, polls=sujets,
+                  phase=assembly_phase(lignes), total_codes=total_codes,
+                  generated_code=code_genere,
+                  created=requete.query_params.get("created") == "1",
+                  deleted=requete.query_params.get("deleted") == "1")
+
+
+@app.post("/admin/ag/{id_assemblee}/codes")
+async def generate_codes(requete: Request, id_assemblee: int):
+    if acces_refuse := require_admin(requete):
+        return acces_refuse
+    formulaire = await requete.form()
+    csrf_check(requete, formulaire)
+    with connect_db() as bdd:
+        bdd.execute("BEGIN IMMEDIATE")
+        try:
+            admin_assembly_or_404(bdd, id_assemblee)
+            sujets = bdd.execute(
+                "SELECT is_open,starts_at,ends_at FROM polls WHERE assembly_id=?", (id_assemblee,)
+            ).fetchall()
+            if assembly_phase(sujets) == "ended":
+                raise HTTPException(status_code=409, detail="Tous les votes de cette AG sont terminés")
+            while True:
+                code = str(secrets.randbelow(9_000_000_000) + 1_000_000_000)
+                try:
+                    bdd.execute("INSERT INTO assembly_codes (assembly_id,code_hash,created_at) VALUES (?,?,?)",
+                               (id_assemblee, code_digest(code), int(time.time())))
+                    break
+                except sqlite3.IntegrityError:
+                    continue
+            bdd.execute("COMMIT")
+        except Exception:
+            if bdd.in_transaction:
+                bdd.execute("ROLLBACK")
+            raise
+    requete.session["new_code"] = {"assembly_id": id_assemblee, "code": code}
+    return redirect_to(f"/admin/ag/{id_assemblee}")
+
+
+@app.post("/admin/ag/{id_assemblee}/delete")
+async def delete_assembly(requete: Request, id_assemblee: int):
+    if acces_refuse := require_admin(requete):
+        return acces_refuse
+    formulaire = await requete.form()
+    csrf_check(requete, formulaire)
+    confirmation = str(formulaire.get("confirmation_titre", ""))
+    with connect_db() as bdd:
+        bdd.execute("BEGIN IMMEDIATE")
+        try:
+            assemblee = admin_assembly_or_404(bdd, id_assemblee)
+            if not hmac.compare_digest(confirmation.encode("utf-8"), assemblee["title"].encode("utf-8")):
+                raise HTTPException(status_code=400, detail="Titre de confirmation incorrect")
+            sujets_de_l_ag = "SELECT id FROM polls WHERE assembly_id=?"
+            bdd.execute(f"DELETE FROM ballots WHERE poll_id IN ({sujets_de_l_ag})", (id_assemblee,))
+            bdd.execute(f"DELETE FROM code_uses WHERE poll_id IN ({sujets_de_l_ag})", (id_assemblee,))
+            bdd.execute(f"DELETE FROM poll_options WHERE poll_id IN ({sujets_de_l_ag})", (id_assemblee,))
+            bdd.execute("DELETE FROM polls WHERE assembly_id=?", (id_assemblee,))
+            bdd.execute("DELETE FROM assembly_codes WHERE assembly_id=?", (id_assemblee,))
+            bdd.execute("DELETE FROM assemblies WHERE id=?", (id_assemblee,))
+            bdd.execute("COMMIT")
+        except Exception:
+            if bdd.in_transaction:
+                bdd.execute("ROLLBACK")
+            raise
+    requete.session.pop("new_code", None)
+    return redirect_to("/admin?deleted=1")
+
+
+@app.get("/admin/ag/{id_assemblee}/polls/new")
+async def create_poll_page(requete: Request, id_assemblee: int):
+    if acces_refuse := require_admin(requete):
+        return acces_refuse
+    with connect_db() as bdd:
+        assemblee = admin_assembly_or_404(bdd, id_assemblee)
+    return render(requete, "new_poll.html", assembly=assemblee)
+
+
+@app.post("/admin/ag/{id_assemblee}/polls/new")
+async def create_poll(requete: Request, id_assemblee: int):
     if acces_refuse := require_admin(requete):
         return acces_refuse
     formulaire = await requete.form()
@@ -555,11 +776,13 @@ async def create_poll(requete: Request):
     description = str(formulaire.get("description", "")).strip()
     propositions = [proposition.strip() for proposition in str(formulaire.get("options", "")).splitlines() if proposition.strip()]
     horaires = schedule_from_form(formulaire)
-    if not (3 <= len(titre) <= 140 and len(description) <= 600
+    with connect_db() as bdd:
+        assemblee = admin_assembly_or_404(bdd, id_assemblee)
+    if not (assembly_form_valid(titre, description)
             and 2 <= len(propositions) <= 10 and all(len(proposition) <= 140 for proposition in propositions)
             and len(set(proposition.casefold() for proposition in propositions)) == len(propositions)
             and horaires is not None):
-        return render(requete, "new_poll.html", status_code=400,
+        return render(requete, "new_poll.html", status_code=400, assembly=assemblee,
                       title_value=titre, description_value=description,
                       options_value="\n".join(propositions),
                       starts_value=str(formulaire.get("starts_at", "")),
@@ -569,16 +792,18 @@ async def create_poll(requete: Request):
     with connect_db() as bdd:
         bdd.execute("BEGIN IMMEDIATE")
         try:
+            admin_assembly_or_404(bdd, id_assemblee)
             id_sujet = bdd.execute(
-                "INSERT INTO polls (title,description,created_at,starts_at,ends_at) VALUES (?,?,?,?,?)",
-                (titre, description, int(time.time()), debut, fin),
+                "INSERT INTO polls (title,description,created_at,starts_at,ends_at,assembly_id) VALUES (?,?,?,?,?,?)",
+                (titre, description, int(time.time()), debut, fin, id_assemblee),
             ).lastrowid
             for indice, libelle in enumerate(propositions):
                 bdd.execute("INSERT INTO poll_options(poll_id,label,position) VALUES (?,?,?)",
                            (id_sujet, libelle, indice))
             bdd.execute("COMMIT")
         except Exception:
-            bdd.execute("ROLLBACK")
+            if bdd.in_transaction:
+                bdd.execute("ROLLBACK")
             raise
     return redirect_to(f"/admin/polls/{id_sujet}?created=1")
 
@@ -587,11 +812,10 @@ def poll_details_data(bdd, id_sujet):
     sujet = bdd.execute("SELECT * FROM polls WHERE id=?", (id_sujet,)).fetchone()
     if sujet is None:
         raise HTTPException(status_code=404, detail="Vote introuvable")
-    statistiques = bdd.execute(
-        """SELECT COUNT(*) AS total_codes,
-           COALESCE(SUM(CASE WHEN used_at IS NOT NULL THEN 1 ELSE 0 END),0) AS used_codes
-           FROM access_codes WHERE poll_id=?""", (id_sujet,)
-    ).fetchone()
+    assemblee = bdd.execute("SELECT id,title FROM assemblies WHERE id=?", (sujet["assembly_id"],)).fetchone()
+    total_codes = bdd.execute(
+        "SELECT COUNT(*) FROM assembly_codes WHERE assembly_id=?", (sujet["assembly_id"],)
+    ).fetchone()[0]
     lignes = bdd.execute(
         """SELECT o.id,o.label,COUNT(b.id) AS votes
            FROM poll_options o LEFT JOIN ballots b ON b.option_id=o.id
@@ -601,7 +825,7 @@ def poll_details_data(bdd, id_sujet):
     resultats = [{"label": ligne["label"], "votes": ligne["votes"],
                 "percent": round(100 * ligne["votes"] / total_votes_enregistres, 1) if total_votes_enregistres else 0}
                for ligne in lignes]
-    return sujet, statistiques, resultats, total_votes_enregistres
+    return sujet, assemblee, total_codes, resultats, total_votes_enregistres
 
 
 @app.get("/admin/polls/{id_sujet}")
@@ -609,52 +833,16 @@ async def admin_poll_detail(requete: Request, id_sujet: int):
     if acces_refuse := require_admin(requete):
         return acces_refuse
     with connect_db() as bdd:
-        sujet, statistiques, resultats, total_votes_enregistres = poll_details_data(bdd, id_sujet)
+        sujet, assemblee, total_codes, resultats, total_votes_enregistres = poll_details_data(bdd, id_sujet)
     etat = poll_phase(sujet)
-    message_temporaire = requete.session.get("new_code")
-    code_genere = None
-    if isinstance(message_temporaire, dict) and message_temporaire.get("poll_id") == id_sujet:
-        code_genere = message_temporaire.get("code")
-        requete.session.pop("new_code", None)
-    return render(requete, "poll_detail.html", poll=sujet, stats=statistiques,
+    return render(requete, "poll_detail.html", poll=sujet, assembly=assemblee,
+                  total_codes=total_codes,
                   phase=etat, show_results=(etat == "ended"),
                   results=resultats if etat == "ended" else [],
                   total_votes=total_votes_enregistres if etat == "ended" else None,
-                  generated_code=code_genere,
                   created=requete.query_params.get("created") == "1",
                   closed=requete.query_params.get("closed") == "1",
                   schedule_saved=requete.query_params.get("schedule_saved") == "1")
-
-
-@app.post("/admin/polls/{id_sujet}/codes")
-async def generate_codes(requete: Request, id_sujet: int):
-    if acces_refuse := require_admin(requete):
-        return acces_refuse
-    formulaire = await requete.form()
-    csrf_check(requete, formulaire)
-    with connect_db() as bdd:
-        bdd.execute("BEGIN IMMEDIATE")
-        try:
-            sujet = bdd.execute("SELECT * FROM polls WHERE id=?", (id_sujet,)).fetchone()
-            if sujet is None:
-                raise HTTPException(status_code=404, detail="Vote introuvable")
-            if poll_phase(sujet) == "ended":
-                raise HTTPException(status_code=409, detail="Vote terminé")
-            while True:
-                code = str(secrets.randbelow(9_000_000_000) + 1_000_000_000)
-                try:
-                    bdd.execute("INSERT INTO access_codes (poll_id,code_hash,created_at) VALUES (?,?,?)",
-                               (id_sujet, code_digest(code), int(time.time())))
-                    break
-                except sqlite3.IntegrityError:
-                    continue
-            bdd.execute("COMMIT")
-        except Exception:
-            if bdd.in_transaction:
-                bdd.execute("ROLLBACK")
-            raise
-    requete.session["new_code"] = {"poll_id": id_sujet, "code": code}
-    return redirect_to(f"/admin/polls/{id_sujet}")
 
 
 @app.post("/admin/polls/{id_sujet}/schedule")
@@ -684,7 +872,6 @@ async def update_poll_schedule(requete: Request, id_sujet: int):
     return redirect_to(f"/admin/polls/{id_sujet}?schedule_saved=1")
 
 
-
 @app.post("/admin/polls/{id_sujet}/delete")
 async def delete_poll(requete: Request, id_sujet: int):
     if acces_refuse := require_admin(requete):
@@ -695,13 +882,13 @@ async def delete_poll(requete: Request, id_sujet: int):
     with connect_db() as bdd:
         bdd.execute("BEGIN IMMEDIATE")
         try:
-            sujet = bdd.execute("SELECT title FROM polls WHERE id=?", (id_sujet,)).fetchone()
+            sujet = bdd.execute("SELECT title,assembly_id FROM polls WHERE id=?", (id_sujet,)).fetchone()
             if sujet is None:
                 raise HTTPException(status_code=404, detail="Sujet introuvable")
             if not hmac.compare_digest(confirmation.encode("utf-8"), sujet["title"].encode("utf-8")):
                 raise HTTPException(status_code=400, detail="Titre de confirmation incorrect")
             bdd.execute("DELETE FROM ballots WHERE poll_id=?", (id_sujet,))
-            bdd.execute("DELETE FROM access_codes WHERE poll_id=?", (id_sujet,))
+            bdd.execute("DELETE FROM code_uses WHERE poll_id=?", (id_sujet,))
             bdd.execute("DELETE FROM poll_options WHERE poll_id=?", (id_sujet,))
             bdd.execute("DELETE FROM polls WHERE id=?", (id_sujet,))
             bdd.execute("COMMIT")
@@ -709,8 +896,7 @@ async def delete_poll(requete: Request, id_sujet: int):
             if bdd.in_transaction:
                 bdd.execute("ROLLBACK")
             raise
-    requete.session.pop("new_code", None)
-    return redirect_to("/admin?deleted=1")
+    return redirect_to(f"/admin/ag/{sujet['assembly_id']}?deleted=1")
 
 
 @app.post("/admin/polls/{id_sujet}/close")

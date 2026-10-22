@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}{{ assembly.title }}{% endblock %}
+{% block content %}
+<div class="center-wide vote-layout">
+  <a class="back-link" href="/">← Toutes les AG</a>
+  <div class="eyebrow">{% if phase == 'open' %}<span class="status-dot"></span> AG en cours{% elif phase == 'upcoming' %}AG à venir{% else %}AG terminée{% endif %}</div>
+  <h1 class="vote-title">{{ assembly.title }}</h1>
+  {% if assembly.description %}<p class="subtitle">{{ assembly.description }}</p>{% endif %}
+  {% if success %}<div class="notice" role="status"><strong>Votre vote a été enregistré !</strong> Vous pouvez voter sur les autres sujets ouverts ci-dessous.</div>{% endif %}
+
+  {% if has_code %}
+    <section class="card panel ag-code-bar">
+      <p><strong>Votre code est actif pour cette AG.</strong> <span class="muted">Pensez à vous déconnecter sur un appareil partagé.</span></p>
+      <form action="/ag/leave" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="button button-secondary" type="submit">Quitter</button>
+      </form>
+    </section>
+  {% elif phase == 'open' %}
+    <section class="card access-card">
+      <h2>Entrez votre code</h2>
+      <p class="muted">Votre code personnel est valable pour <strong>tous les sujets de cette AG</strong>, avec une voix par sujet.</p>
+      {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+      <form action="/ag/{{ assembly.id }}/access" method="post" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="code">Code numérique (10 chiffres)</label>
+        <input class="code-input" type="text" name="code" id="code" required inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="one-time-code" placeholder="••••••••••" autofocus>
+        <button class="button button-primary full" type="submit">Accéder aux votes →</button>
+      </form>
+    </section>
+  {% elif error %}
+    <div class="alert" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <section class="card panel ag-polls">
+    <div class="panel-top"><h2>Sujets</h2><span class="muted">{{ polls|length }} sujet{% if polls|length != 1 %}s{% endif %}</span></div>
+    {% if polls %}
+    <div class="poll-list">
+      {% for poll in polls %}
+      <div class="poll-row">
+        <span class="poll-main">
+          <strong>{{ poll.title }}</strong>
+          <small>
+            {% if poll.phase == 'open' %}<span class="mini-dot"></span> Ouvert jusqu'au {{ poll.ends_at|local_date }}
+            {% elif poll.phase == 'upcoming' %}Ouvre le {{ poll.starts_at|local_date }}
+            {% else %}Terminé{% endif %}
+          </small>
+        </span>
+        {% if has_code and poll.voted %}
+          <span class="public-status public-status-open">✓ Vote enregistré</span>
+        {% elif has_code and poll.phase == 'open' %}
+          <a class="button button-primary" href="/vote/{{ poll.id }}">Voter →</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">Aucun sujet n'a encore été ajouté à cette AG.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
