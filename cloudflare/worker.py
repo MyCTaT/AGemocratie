@@ -31,8 +31,8 @@ SESSION = "__Host-ag_session"
 CSRF = "__Host-ag_csrf"
 DUREE_SESSION = 4 * 60 * 60
 DUREE_LIMITE = 15 * 60
-ITERATIONS_MIN = 150_000
-ITERATIONS_MAX = 1_000_000
+ITERATIONS_MIN = 100_000
+ITERATIONS_MAX = 100_000
 
 modeles = Environment(loader=FileSystemLoader(str(DOSSIER / "templates")),
                       autoescape=select_autoescape(["html", "xml"]))
@@ -316,11 +316,11 @@ async def _hash_mdp(mot_de_passe):
     cle = await crypto.subtle.importKey("raw", TextEncoder.new().encode(mot_de_passe),
                                        "PBKDF2", False, to_js(["deriveBits"]))
     options = to_js({"name": "PBKDF2", "hash": "SHA-256",
-                     "salt": to_js(sel), "iterations": 390_000},
+                     "salt": to_js(sel), "iterations": 100_000},
                      dict_converter=Object.fromEntries)
     bits = await crypto.subtle.deriveBits(options, cle, 256)
     empreinte = bytes(Uint8Array.new(bits).to_py())
-    return f"pbkdf2_sha256$390000${sel.hex()}${empreinte.hex()}"
+    return f"pbkdf2_sha256$100000${sel.hex()}${empreinte.hex()}"
 
 
 def _portees(requete, identifiant, secret):
