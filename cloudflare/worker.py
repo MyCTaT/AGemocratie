@@ -78,7 +78,7 @@ async def securite(requete: Request, suivant):
     reponse.headers["Cache-Control"] = "no-store"
     reponse.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'none'; style-src 'self'; "
-        "img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+        "img-src 'self' https://agemocratie.alwaysdata.net; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
     )
     reponse.headers["Strict-Transport-Security"] = "max-age=31536000"
     return reponse
