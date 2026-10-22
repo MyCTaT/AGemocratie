@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Tableau de bord{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Espace administrateur</div><h1>Tableau de bord<span class="accent">.</span></h1><p class="subtitle">Créez et suivez vos consultations.</p></div><a class="button button-primary" href="/admin/polls/new">+ Créer un vote</a></div>
+{% if request.query_params.get('deleted') == '1' %}
+<div class="notice" role="status">Le sujet et ses données ont été supprimés.</div>
+{% endif %}
+<section class="card panel">
+  <div class="panel-top"><h2>Mes votes</h2><span class="muted">{{ polls|length }} consultation{% if polls|length != 1 %}s{% endif %}</span></div>
+  {% if polls %}
+  <div class="poll-list">
+    {% for poll in polls %}
+    <a class="poll-row" href="/admin/polls/{{ poll.id }}">
+      <span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'open' %}<span class="mini-dot"></span> En cours{% else %}Terminé{% endif %} · {{ poll.total_codes }} code{% if poll.total_codes != 1 %}s{% endif %}</small></span>
+      <span class="poll-count">{% if poll.phase == 'ended' %}{{ poll.total_votes }} vote{% if poll.total_votes != 1 %}s{% endif %}{% else %}Résultats masqués{% endif %}</span><span class="arrow">→</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="section-icon">✦</div><h3>Aucun vote pour le moment</h3><p class="muted">Commencez par créer votre première question.</p><a href="/admin/polls/new" class="button button-secondary">Créer un vote</a></div>
+  {% endif %}
+</section>
+{% endblock %}

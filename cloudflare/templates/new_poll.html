@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Créer un vote{% endblock %}
+{% block content %}
+<div class="center-wide inner-page">
+  <a class="back-link" href="/admin">← Retour au tableau de bord</a>
+  <div class="eyebrow">Nouvelle consultation</div><h1>Créer un vote<span class="accent">.</span></h1>
+  <p class="subtitle">Préparez les choix et fixez le début et la fin du vote.</p>
+  <section class="card form-card">
+    {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+    <form class="form-stack" action="/admin/polls/new" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="title">Question ou titre du vote</label>
+      <input type="text" name="title" id="title" minlength="3" maxlength="140" value="{{ title_value|default('') }}" required placeholder="Ex. Quel projet souhaitez-vous soutenir ?">
+      <label for="description">Description <span class="muted">(facultative)</span></label>
+      <textarea id="description" name="description" rows="3" maxlength="600" placeholder="Précisez le contexte du vote...">{{ description_value|default('') }}</textarea>
+      <label for="options">Réponses possibles</label>
+      <textarea id="options" name="options" rows="7" required placeholder="Oui&#10;Non&#10;Abstention">{{ options_value|default('') }}</textarea>
+      <div class="hint">Une réponse par ligne, entre 2 et 10 réponses différentes.</div>
+      <label for="starts_at">Date et heure de début (heure de Paris)</label>
+      <input type="datetime-local" name="starts_at" id="starts_at" value="{{ starts_value|default('') }}" required>
+      <label for="ends_at">Date et heure de fin (heure de Paris)</label>
+      <input type="datetime-local" name="ends_at" id="ends_at" value="{{ ends_value|default('') }}" required>
+      <button class="button button-primary" type="submit">Créer ce vote <span aria-hidden="true">→</span></button>
+    </form>
+  </section>
+</div>
+{% endblock %}
