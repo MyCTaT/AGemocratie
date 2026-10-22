@@ -134,12 +134,15 @@ def _jeton_csrf(secret):
 
 def _csrf_valide(requete, secret, formulaire):
     origine = requete.headers.get("origin")
-    # Contrôle Origin systématique si le navigateur l'envoie.
-    if origine:
-        url_origine = urlparse(origine)
-        if (url_origine.scheme != "https"
-                or url_origine.netloc.lower() != requete.url.netloc.lower()):
-            raise HTTPException(403, detail="Origine du formulaire invalide")
+    origines_autorisees = {
+        "https://agemocratie.lironafriat-pro.workers.dev",
+    }
+
+    if origine and origine.rstrip("/").lower() not in origines_autorisees:
+        raise HTTPException(
+            403,
+            detail="Origine du formulaire invalide"
+        )
     cookie = requete.cookies.get(CSRF, "")
     jeton = str(formulaire.get("csrf_token", ""))
     if not cookie or not jeton or not hmac.compare_digest(cookie, jeton):
