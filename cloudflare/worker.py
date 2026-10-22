@@ -590,7 +590,7 @@ async def supprimer_scrutin(requete: Request, id_sujet: int):
     # ON DELETE CASCADE géré par les clés étrangères du schéma D1.
     result = await _bdd(requete).prepare("DELETE FROM scrutins WHERE id=? AND titre=?").bind(
         id_sujet, scrutin["title"]).run()
-    if int(result.meta.changes) != 1:
+    if int(result.meta.changes) < 1:
         raise HTTPException(409, detail="Scrutin introuvable ou modifié")
     return _lien("/admin?deleted=1")
 
