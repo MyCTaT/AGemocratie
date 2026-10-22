@@ -72,7 +72,7 @@ async def securite(requete: Request, suivant):
     reponse = await suivant(requete)
     reponse.headers["X-Content-Type-Options"] = "nosniff"
     reponse.headers["X-Frame-Options"] = "DENY"
-    reponse.headers["Referrer-Policy"] = "no-referrer"
+    reponse.headers["Referrer-Policy"] = "same-origin"
     reponse.headers["Cache-Control"] = "no-store"
     reponse.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'none'; style-src 'self'; "
