@@ -121,8 +121,9 @@ SELECT id, identifiant, role FROM administrateurs;
 5. Teste la déconnexion et la création d'un administrateur secondaire.
 
 **Important pour le plan gratuit** : Cloudflare Workers Free limite le CPU à
-10 ms par requête. Le PBKDF2 est délégué au Web Crypto natif, mais ses 390 000
-itérations peuvent malgré tout poser un problème de quota/latence. Si la
+10 ms par requête. Le PBKDF2 est délégué au Web Crypto natif, avec 100 000
+itérations (le maximum accepté par Web Crypto sur Cloudflare) ; cela peut malgré
+tout poser un problème de quota/latence. Si la
 connexion déclenche une erreur **1102** ou **500**, consulte les logs Workers
 et arrête les tests de production ; ne baisse pas les itérations pour contourner
 le problème de sécurité. Le plan Workers Paid ou une autre architecture
@@ -133,8 +134,12 @@ pas la performance de l'API Web Crypto sur Cloudflare réel.
 
 ## Sécurité et limites
 
-- Mots de passe stockés au format `pbkdf2_sha256$390000$sel$empreinte` compatible
-  avec celui de l'application locale ; vérification avec l'API Web Crypto.
+- Mots de passe stockés au format `pbkdf2_sha256$100000$sel$empreinte` ; le Worker
+  n'accepte que 100 000 itérations. Ces empreintes ne sont **pas** reconnues par
+  l'application locale (`app.py` exige 150 000 à 1 000 000), et inversement.
+- Un compte `admin` créé avec une ancienne version de `creer_admin_d1.py`
+  (390 000 itérations) ne peut pas se connecter : recrée son empreinte avec
+  l'outil actuel et remplace-la par un `UPDATE administrateurs SET mot_de_passe_hash=...`.
 - Sessions HMAC signées, durée 4 h, invalidation après réinitialisation du
   mot de passe ou suppression d'un compte.
 - Cookie `Secure`, `HttpOnly`, `SameSite=Lax`, préfixe `__Host-` ; il faut HTTPS.

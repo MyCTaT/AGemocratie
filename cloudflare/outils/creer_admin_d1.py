@@ -6,7 +6,8 @@ from getpass import getpass
 import hashlib
 import secrets
 
-ITERATIONS = 390_000
+# Doit correspondre à ITERATIONS_MIN/MAX de worker.py (limite Web Crypto Cloudflare).
+ITERATIONS = 100_000
 
 def main():
     mot_de_passe = getpass("Mot de passe du compte 'admin' (12 caractères min.) : ")
