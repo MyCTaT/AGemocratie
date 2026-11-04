@@ -3,7 +3,7 @@
 {% block content %}
 <div class="inner-page">
   <a class="back-link" href="/admin/ags/{{ ag.id }}">← Retour à {{ ag.title }}</a>
-  <div class="eyebrow">Sujet de {{ ag.title }} · Vote n° {{ poll.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% else %}Terminé{% endif %}</div>
+  <div class="eyebrow">Sujet de {{ ag.title }} · Vote n° {{ poll.id }} · {% if phase == 'upcoming' %}À venir{% elif phase == 'open' %}En cours{% elif phase == 'invalid' %}Dates à vérifier{% else %}Terminé{% endif %}</div>
   <h1>{{ poll.title }}<span class="accent">.</span></h1>
   {% if poll.description %}<p class="subtitle">{{ poll.description }}</p>{% endif %}
   {% if created %}<div class="notice" role="status">Scrutin créé. Tu peux gérer les dates ci-dessous.</div>{% endif %}
@@ -40,7 +40,7 @@
   <section class="card panel">
     <h2>Vote des participants</h2>
     <div class="notice">Les codes sont générés au niveau de l’AG. <a href="/admin/ags/{{ ag.id }}">Gérer les codes et les sujets de cette AG</a>. Les résultats publics sont visibles une fois le sujet clôturé.</div>
-    {% if phase != 'ended' %}
+    {% if phase not in ['ended', 'invalid'] %}
       <form action="/admin/polls/{{ poll.id }}/close" method="post" class="form-stack">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="button button-danger">Clôturer définitivement le scrutin</button>

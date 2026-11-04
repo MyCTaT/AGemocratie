@@ -3,3 +3,8 @@ instance/
 __pycache__/
 .pytest_cache/
 *.pyc
+.vscode/settings.json
+.wrangler/
+cloudflare/.wrangler/
+LIRE_MOI_PBKDF2.md
+reinitialiser_admin_pbkdf2_100k.py

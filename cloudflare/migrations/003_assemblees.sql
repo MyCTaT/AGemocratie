@@ -20,6 +20,7 @@ UPDATE scrutins SET assemblee_id=1 WHERE assemblee_id IS NULL;
 
 CREATE UNIQUE INDEX idx_scrutins_id_ag ON scrutins(id,assemblee_id);
 CREATE INDEX idx_scrutins_ag ON scrutins(assemblee_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_choix_id_scrutin ON choix(id,scrutin_id);
 
 CREATE TABLE ag_codes (
     id INTEGER PRIMARY KEY,
@@ -46,3 +47,4 @@ CREATE TABLE ag_votes (
         REFERENCES choix(id,scrutin_id) ON DELETE CASCADE
 );
 CREATE INDEX idx_ag_votes_scrutin ON ag_votes(scrutin_id);
+CREATE INDEX idx_ag_votes_choix ON ag_votes(choix_id);

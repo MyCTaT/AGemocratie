@@ -3,10 +3,11 @@
   "main": "worker.py",
   "compatibility_date": "2026-10-22",
   "compatibility_flags": [
-    "python_workers"
+    "python_workers",
+    "python_workers_314"
   ],
   "secrets": {
-    "required": ["APP_SECRET_KEY"]
+    "required": ["APP_SECRET_KEY", "AG_CODE_KEY", "LEGACY_AG_CODE_KEY"]
   },
   "d1_databases": [
     {
@@ -17,5 +18,10 @@
   ],
   "assets": {
     "directory": "./public"
+  },
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "logs": { "invocation_logs": true }
   }
 }

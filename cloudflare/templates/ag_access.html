@@ -8,12 +8,12 @@
 {% if ag.description %}<p class="subtitle">{{ ag.description }}</p>{% endif %}
 <section class="card access-card">
   <h2>Votre code personnel</h2>
-  <p>Entrez le code de 10 chiffres qui vous a été remis pour cette AG. Il vous donne accès à tous ses sujets.</p>
+  <p>Saisissez le code de 12 chiffres fourni pour cette AG. Les anciens codes a 10 chiffres restent acceptes jusqu a leur expiration.</p>
   {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
   <form action="/ag/{{ ag.id }}/access" method="post" class="form-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label for="code">Code d'accès à l'AG</label>
-    <input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="off" required autofocus placeholder="0123456789">
+    <input id="code" name="code" type="text" inputmode="numeric" pattern="([0-9]{10}|[0-9]{12})" minlength="10" maxlength="12" autocomplete="off" required autofocus placeholder="012345678901">
     <button class="button button-primary full" type="submit">Entrer dans l'AG →</button>
   </form>
   <p class="muted">Chaque personne dispose de son propre code : une seule participation est possible sur chaque sujet.</p>

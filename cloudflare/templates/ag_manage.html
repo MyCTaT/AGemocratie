@@ -9,9 +9,9 @@
 <section class="card panel">
 <div class="panel-top"><h2>Sujets de cette AG</h2><span class="muted">{{ polls|length }} sujet{% if polls|length != 1 %}s{% endif %}</span></div>
 {% if polls %}<div class="poll-list">{% for poll in polls %}
-<a class="poll-row" href="/admin/polls/{{ poll.id }}"><span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'open' %}En cours{% elif poll.phase == 'upcoming' %}À venir{% else %}Terminé{% endif %}</small></span><span class="arrow">→</span></a>
+<a class="poll-row" href="/admin/polls/{{ poll.id }}"><span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'open' %}En cours{% elif poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'invalid' %}Dates à vérifier{% else %}Terminé{% endif %}</small></span><span class="arrow">→</span></a>
 {% endfor %}</div>{% else %}<p class="muted">Aucun sujet pour le moment.</p>{% endif %}
-<p style="margin-top:1rem"><a class="button button-primary" href="/admin/polls/new?ag_id={{ ag.id }}">+ Ajouter un sujet</a></p>
+<p class="section-action"><a class="button button-primary" href="/admin/polls/new?ag_id={{ ag.id }}">+ Ajouter un sujet</a></p>
 </section>
 <section class="card panel">
 <h2>Codes d'accès à l'AG</h2>
@@ -22,9 +22,14 @@
 <button class="button button-secondary" type="submit">+ Générer un code personnel</button>
 </form>
 </section>
+{% if code_revoked %}<div class="notice" role="status">Code révoqué.</div>{% endif %}
+{% if codes %}<section class="card panel panel-spaced"><h2>Codes enregistrés</h2><div class="poll-list">
+{% for code in codes %}<div class="poll-row"><span class="poll-main"><strong>Code {{ code.id }}</strong><small>Créé {{ code.cree_le }} · expire le {{ code.expire_le|local_date }}</small></span>
+{% if code.revoque_le %}<span class="muted">Révoqué</span>{% else %}<form action="/admin/ags/{{ ag.id }}/codes/{{ code.id }}/revoke" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-danger" type="submit">Révoquer</button></form>{% endif %}</div>{% endfor %}
+</div></section>{% endif %}
 <a class="button button-secondary" href="/ag/{{ ag.id }}">Voir la page publique de l'AG</a>
-{% if is_owner %}
-<section class="card panel" style="margin-top:1.5rem">
+{% if is_owner or ag.created_by == admin_id %}
+<section class="card panel panel-spaced">
 <h2>Supprimer cette AG</h2><p class="muted">Attention : suppression irréversible de tous ses sujets, votes et codes.</p>
 <form action="/admin/ags/{{ ag.id }}/delete" method="post" class="form-stack">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

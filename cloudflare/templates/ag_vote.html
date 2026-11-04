@@ -16,6 +16,8 @@
 {% elif deja_vote %}
 <h2>Vote enregistré</h2>
 <div class="notice">Vous avez déjà voté sur ce sujet. Vous pouvez voter sur les autres.</div>
+{% elif poll.phase == 'invalid' %}
+<h2>Vote indisponible</h2><p>Les dates de ce scrutin doivent être vérifiées par son administrateur.</p>
 {% elif poll.phase == 'upcoming' %}
 <h2>Vote à venir</h2><p>Ouverture : {{ poll.starts_at|local_date }}.</p>
 {% else %}
