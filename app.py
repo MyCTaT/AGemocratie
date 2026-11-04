@@ -7,6 +7,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import hmac
+import ipaddress
 import io
 import os
 import secrets
@@ -36,7 +37,7 @@ if len(MOT_DE_PASSE_ADMIN) < 12 or "REMPLACER" in MOT_DE_PASSE_ADMIN.upper():
 
 CHEMIN_BASE_DONNEES = Path(os.environ.get("DATABASE_PATH", DOSSIER_PROJET / "instance" / "votes.sqlite3"))
 CHEMIN_BASE_DONNEES.parent.mkdir(parents=True, exist_ok=True)
-COOKIE_SECURISE = os.environ.get("COOKIE_SECURE", "0") == "1"
+COOKIE_SECURISE = os.environ.get("COOKIE_SECURE", "1") == "1"
 
 app = FastAPI(title="Vote par code", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
@@ -269,7 +270,13 @@ def code_digest(code: str) -> str:
 
 
 def scope_for(requete: Request, categorie: str) -> str:
-    adresse_ip = requete.client.host if requete.client else "unknown"
+    # Render places Cloudflare in front of the service. Use its normalized client
+    # address header instead of trusting arbitrary X-Forwarded-For values.
+    adresse_ip = requete.headers.get("cf-connecting-ip", "")
+    try:
+        adresse_ip = str(ipaddress.ip_address(adresse_ip))
+    except ValueError:
+        adresse_ip = requete.client.host if requete.client else "unknown"
     return hmac.new(CLE_SECRETE_APPLICATION.encode(), f"{categorie}:{adresse_ip}".encode(), hashlib.sha256).hexdigest()
 
 
@@ -302,7 +309,7 @@ async def security_headers(requete: Request, appel_suivant):
         "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; "
         "form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
     )
-    if COOKIE_SECURISE and requete.url.scheme == "https":
+    if COOKIE_SECURISE:
         reponse_http.headers["Strict-Transport-Security"] = "max-age=31536000"
     return reponse_http
 

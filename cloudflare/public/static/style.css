@@ -3,6 +3,13 @@
 @media(max-width:700px){.site-shell{width:min(100% - 28px,1120px)}.site-header{height:80px;gap:12px}.brand{font-size:22px}.brand-icon{width:34px;height:34px;font-size:21px}.nav{gap:13px;font-size:12px}.nav a:nth-child(2){white-space:nowrap}.nav .logout{font-size:12px}.hero{padding-top:47px}.access-card{padding:26px 22px}.feature-row{gap:10px;margin-top:38px}.feature{padding:0}.feature strong{font-size:12px}.feature p{font-size:11px}.footer{margin-top:52px}.page-head{align-items:flex-start;flex-direction:column}.panel{padding:21px}.stats-grid{gap:9px}.stat{padding:16px 13px}.stat strong{font-size:27px}.stat span{font-size:11px}.admin-grid{grid-template-columns:1fr}.form-card{padding:22px}.poll-count{display:none}.inner-page{padding-top:20px}}
 @media(max-width:380px){.nav{gap:9px}.brand{font-size:20px}.nav{font-size:11px}.footer{flex-direction:column}.feature-row{grid-template-columns:1fr;gap:17px}.feature{display:grid;grid-template-columns:30px 1fr}.feature-number{grid-row:span 2;margin:0}.feature p{margin:1px 0}}
 
+.access-code-reveal{font-size:1.8rem;text-align:center;letter-spacing:.16rem;overflow-wrap:anywhere}
+.ag-exit-form{margin-bottom:1.4rem}
+.section-action{margin-top:1rem}
+.panel-spaced{margin-top:1.5rem}
+.admin-user-row{margin-bottom:1.5rem;padding-bottom:1.25rem;border-bottom:1px solid #aaa5}
+.form-spaced{margin-top:1rem}
+
 .public-poll-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,315px),1fr));gap:19px;margin:14px auto 38px}
 .public-poll{padding:26px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .public-poll h2{overflow-wrap:anywhere;margin:0}

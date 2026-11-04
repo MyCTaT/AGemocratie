@@ -14,24 +14,25 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label for="username">Identifiant (3 à 32 lettres/chiffres, _ ou -)</label>
       <input type="text" id="username" name="username" pattern="[A-Za-z0-9_-]{3,32}" minlength="3" maxlength="32" required autocomplete="off">
-      <label for="password">Mot de passe (au moins 12 caractères)</label>
-      <input type="password" id="password" name="password" minlength="12" maxlength="256" required autocomplete="new-password">
+      <label for="password">Mot de passe (au moins 16 caractères)</label>
+      <input type="password" id="password" name="password" minlength="16" maxlength="256" required autocomplete="new-password">
       <button class="button button-primary" type="submit">+ Créer le compte</button>
     </form>
   </section>
   <section class="card panel">
     <h2>Comptes existants</h2>
     {% for person in users %}
-      <div style="margin-bottom:1.5rem; padding-bottom:1.25rem; border-bottom:1px solid #aaa5;">
+      <div class="admin-user-row">
         <h3>{{ person.username }} {% if person.role == 'owner' %}— Principal{% else %}— Administrateur{% endif %}</h3>
         <form action="/admin/users/{{ person.id }}/password" method="post" class="form-stack">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <label for="password-{{ person.id }}">Remplacer son mot de passe</label>
-          <input type="password" id="password-{{ person.id }}" name="password" minlength="12" maxlength="256" required autocomplete="new-password">
+          {% if person.id == admin_id %}<label for="current-password-{{ person.id }}">Mot de passe actuel</label><input type="password" id="current-password-{{ person.id }}" name="current_password" minlength="16" maxlength="256" required autocomplete="current-password">{% endif %}
+          <label for="password-{{ person.id }}">Remplacer son mot de passe (16 caractères minimum)</label>
+          <input type="password" id="password-{{ person.id }}" name="password" minlength="16" maxlength="256" required autocomplete="new-password">
           <button type="submit" class="button button-secondary">Changer le mot de passe</button>
         </form>
         {% if person.role != 'owner' %}
-          <form action="/admin/users/{{ person.id }}/delete" method="post" class="form-stack" style="margin-top:1rem">
+          <form action="/admin/users/{{ person.id }}/delete" method="post" class="form-stack form-spaced">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="confirm-{{ person.id }}">Pour supprimer ce compte, recopier : <strong>{{ person.username }}</strong></label>
             <input type="text" id="confirm-{{ person.id }}" name="confirmation_identifiant" required autocomplete="off">
