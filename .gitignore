@@ -8,3 +8,80 @@ __pycache__/
 cloudflare/.wrangler/
 LIRE_MOI_PBKDF2.md
 reinitialiser_admin_pbkdf2_100k.py
+
+# Apercu prive : aucun de ces fichiers ne doit partir sur Git/Cloudflare.
+.apercu_local/
+OUVRIR_EN_LOCAL.bat
+cloudflare/apercu_local_worker.py
+cloudflare/wrangler.apercu_local.jsonc
+cloudflare/python_modules/
+cloudflare/pylock.toml
+
+# Protection complementaire : secrets, donnees et captures privees
+.env.*
+!.env.example
+!.env.*.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+credentials*.json
+service-account*.json
+secrets*.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+
+# Bases, copies, exports et journaux (conserver les migrations SQL)
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.db
+*.db-*
+*.dump
+*.sql.gz
+*.bak
+*.log
+*.har
+*.eml
+*.mbox
+logs/
+exports/
+donnees_privees/
+sauvegardes/
+backups/
+sauvegarde_*/
+/*.zip
+
+# Identifiants locaux et outils generes
+identifiants*.txt
+acces_admin.txt
+test_local/.state/
+.verification*/
+node_modules/
+.venv/
+.venv-*/
+.venv_workers/
+.venv-workers/
+python_modules/
+.vscode/settings.json
+
+# Copie privee d'une configuration Wrangler, pas la configuration de production
+wrangler.test-local.jsonc
+wrangler.apercu_local.jsonc
+wrangler.local.jsonc
+
+# Secrets du second facteur admin
+mfa_admin.txt
+admin_totp_secrets.json
+*.otpauth
+
+# Connexion Google Apps Script : jetons OAuth privés
+.clasprc*.json
+client_secret*.json
+oauth_credentials*.json

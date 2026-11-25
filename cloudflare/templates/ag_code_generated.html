@@ -2,13 +2,19 @@
 {% block title %}Code personnel généré{% endblock %}
 {% block content %}
 <div class="center-narrow vote-layout">
-<a class="back-link" href="/admin/ags/{{ ag.id }}">← Gestion de l'AG</a>
+{% if participant %}<a class="back-link" href="/ag/{{ ag.id }}">← Accès à l’AG</a>{% else %}<a class="back-link" href="/admin/ags/{{ ag.id }}">← Gestion de l'AG</a>{% endif %}
 <div class="eyebrow">{{ ag.title }}</div><h1>Code généré<span class="accent">.</span></h1>
 <section class="card access-card">
-<h2>Remettre ce code au participant</h2>
+<h2>{% if participant %}Votre code personnel{% else %}Remettre ce code au participant{% endif %}</h2>
 <p class="notice access-code-reveal"><strong>{{ code }}</strong></p>
-<p class="muted">Ce code est affiché uniquement sur cette page : notez-le maintenant et transmettez-le de manière privée. Il ne sera pas conservé en clair dans D1.</p>
+{% if participant %}
+<p class="notice">Copiez votre code maintenant et conservez-le. Pour protéger votre confidentialité, il n’est jamais envoyé par mail et ne pourra pas être récupéré.</p>
+{% else %}<p class="muted">Ce code est affiché uniquement sur cette page : notez-le maintenant et transmettez-le de manière privée. Il ne sera pas conservé en clair dans D1.</p>{% endif %}
 <p>Ce code ouvre tous les sujets de <strong>{{ ag.title }}</strong>. Il autorise un vote par sujet.</p>
-<a class="button button-primary full" href="/admin/ags/{{ ag.id }}">Terminer</a>
+{% if participant %}
+<form action="/ag/{{ ag.id }}/access" method="post" class="form-stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="code" value="{{ code }}">
+<button class="button button-primary full" type="submit">Entrer dans l’AG →</button></form>
+{% else %}<a class="button button-primary full" href="/admin/ags/{{ ag.id }}">Terminer</a>{% endif %}
 </section></div>
 {% endblock %}

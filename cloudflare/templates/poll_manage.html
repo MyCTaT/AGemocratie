@@ -36,10 +36,11 @@
     <div class="poll-row"><span class="poll-main"><strong>{{ ligne.intitule }}</strong></span><span class="poll-count">{{ ligne.total }} voix</span></div>
     {% endfor %}
   </section>
+  {% elif phase == 'ended' %}<section class="card panel"><h2>Résultats protégés</h2><p>Les résultats ne sont pas publiés avant la fin prévue ni lorsque les effectifs permettent de déduire des votes individuels.</p></section>
   {% endif %}
   <section class="card panel">
     <h2>Vote des participants</h2>
-    <div class="notice">Les codes sont générés au niveau de l’AG. <a href="/admin/ags/{{ ag.id }}">Gérer les codes et les sujets de cette AG</a>. Les résultats publics sont visibles une fois le sujet clôturé.</div>
+    <div class="notice">Les codes sont générés au niveau de l’AG. <a href="/admin/ags/{{ ag.id }}">Gérer les codes et les sujets de cette AG</a>. Les résultats respectent la date de fin prévue et les règles de confidentialité, y compris après une clôture anticipée.</div>
     {% if phase not in ['ended', 'invalid'] %}
       <form action="/admin/polls/{{ poll.id }}/close" method="post" class="form-stack">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
