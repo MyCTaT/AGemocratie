@@ -10,9 +10,11 @@
 {% if poll.phase == 'ended' %}
 <h2>Résultats définitifs</h2>
 <p class="muted">Ce vote est clôturé.</p>
+{% if resultats is none %}<div class="notice">Les résultats ne sont pas publiés avant la fin prévue ni lorsque les effectifs permettent de déduire des votes individuels.</div>{% else %}
 {% for option in resultats %}
 <div class="poll-row"><span class="poll-main"><strong>{{ option.intitule }}</strong></span><span class="poll-count">{{ option.total }} voix</span></div>
 {% endfor %}
+{% endif %}
 {% elif deja_vote %}
 <h2>Vote enregistré</h2>
 <div class="notice">Vous avez déjà voté sur ce sujet. Vous pouvez voter sur les autres.</div>

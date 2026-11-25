@@ -270,8 +270,8 @@ def code_digest(code: str) -> str:
 
 
 def scope_for(requete: Request, categorie: str) -> str:
-    # Render places Cloudflare in front of the service. Use its normalized client
-    # address header instead of trusting arbitrary X-Forwarded-For values.
+
+
     adresse_ip = requete.headers.get("cf-connecting-ip", "")
     try:
         adresse_ip = str(ipaddress.ip_address(adresse_ip))
@@ -689,7 +689,6 @@ async def update_poll_schedule(requete: Request, id_sujet: int):
                 bdd.execute("ROLLBACK")
             raise
     return redirect_to(f"/admin/polls/{id_sujet}?schedule_saved=1")
-
 
 
 @app.post("/admin/polls/{id_sujet}/delete")

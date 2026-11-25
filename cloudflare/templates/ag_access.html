@@ -7,16 +7,47 @@
 <h1>{{ ag.title }}<span class="accent">.</span></h1>
 {% if ag.description %}<p class="subtitle">{{ ag.description }}</p>{% endif %}
 <section class="card access-card">
+  {% if email_error %}<div class="alert" role="alert">{{ email_error }}</div>{% endif %}
+  {% if verified %}
+  <h2>Votre adresse est vérifiée</h2>
+  <p>Vous pouvez générer votre code personnel pour tous les sujets de cette AG.</p>
+  <form action="/ag/{{ ag.id }}/email/generate" method="post" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="button button-primary full" type="submit">Générer mon code d’AG</button>
+  </form><div class="divider"></div>
+  {% elif pending %}
+  <h2>Vérifiez votre boîte mail</h2>
+  <p>Entrez les 6 chiffres reçus par mail. Ils sont valables 10 minutes (5 essais maximum).</p>
+  <form action="/ag/{{ ag.id }}/email/verify" method="post" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="otp">Code de vérification</label>
+    <input id="otp" name="otp" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+    <button class="button button-primary full" type="submit">Vérifier mon adresse</button>
+  </form><div class="divider"></div>
+  {% endif %}
   <h2>Votre code personnel</h2>
-  <p>Saisissez le code de 12 chiffres fourni pour cette AG. Les anciens codes a 10 chiffres restent acceptes jusqu a leur expiration.</p>
+  <p>Saisissez le code de 12 chiffres que vous avez généré et conservé pour cette AG.</p>
   {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
   <form action="/ag/{{ ag.id }}/access" method="post" class="form-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label for="code">Code d'accès à l'AG</label>
-    <input id="code" name="code" type="text" inputmode="numeric" pattern="([0-9]{10}|[0-9]{12})" minlength="10" maxlength="12" autocomplete="off" required autofocus placeholder="012345678901">
+    <input id="code" name="code" type="text" inputmode="numeric" pattern="([0-9]{10}|[0-9]{12})" minlength="10" maxlength="12" autocomplete="off" required placeholder="012345678901">
     <button class="button button-primary full" type="submit">Entrer dans l'AG →</button>
   </form>
   <p class="muted">Chaque personne dispose de son propre code : une seule participation est possible sur chaque sujet.</p>
+  <div class="divider"></div>
+  <details{% if not pending or email_error %} open{% endif %}>
+    <summary>Je n’ai pas encore de code pour cette AG</summary>
+    <form action="/ag/{{ ag.id }}/email/send" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="email">Adresse universitaire</label>
+      <input id="email" name="email" type="email" autocomplete="email" maxlength="254" value="{{ email_value|default('') }}" aria-describedby="email-help" required>
+      <p class="hint">Le mail sert uniquement à vérifier votre adresse. Votre code d’AG sera affiché sur le site et ne sera jamais envoyé par mail.</p>
+      <p id="email-help" class="hint">@etu.sorbonne-universite.fr ou @sorbonne-universite.fr. Un code par adresse et par AG.</p>
+      <p class="hint"><a href="/documents/rgpd.txt">Utilisation de vos données personnelles</a></p>
+      <button class="button button-secondary full" type="submit">{% if pending %}Renvoyer un code de vérification{% else %}Recevoir mon code de vérification{% endif %}</button>
+    </form>
+  </details>
 </section>
 </div>
 {% endblock %}

@@ -1,0 +1,13 @@
+{
+  "timeZone": "Europe/Paris",
+  "runtimeVersion": "V8",
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {"userSymbol": "Gmail", "serviceId": "gmail", "version": "v1"}
+    ]
+  },
+  "oauthScopes": [
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/script.scriptapp"
+  ]
+}
