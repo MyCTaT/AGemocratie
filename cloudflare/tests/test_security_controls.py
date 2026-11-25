@@ -129,7 +129,7 @@ class SecurityTests(unittest.TestCase):
     def test_rgpd_document_is_linked_and_matches_source(self):
         with patch.object(self.f.worker,'_bdd',side_effect=AssertionError('no database')):
             with patch.object(self.f.worker,'_secret',side_effect=AssertionError('no secret')):
-                for path in ['/confidentialite','/DOSSIER_RGPD_INTERNE.md','/static/DOSSIER_RGPD_INTERNE.md']:
+                for path in ['/confidentialite','/document-prive.md','/static/document-prive.md']:
                     response=self.f.client.get(path)
                     self.assertEqual(response.status_code,404,path)
                     self.assertNotIn('set-cookie',response.headers)

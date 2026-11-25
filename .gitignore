@@ -85,3 +85,8 @@ admin_totp_secrets.json
 .clasprc*.json
 client_secret*.json
 oauth_credentials*.json
+
+/DOSSIER_RGPD_INTERNE.md
+/CONFIDENTIALITE_ET_RGPD.md
+/NOTICE_RGPD_A_COMPLETER.md
+/rgpd_interne/

@@ -1,6 +1,6 @@
 # Version finale Cloudflare
 
-> **État du 22 novembre 2026 : préparation, pas de conformité globale déclarée.** Les protections techniques sont vérifiées, mais l’anonymat contre l’exploitant n’est pas garanti. Lire `CONFIDENTIALITE_ET_RGPD.md` pour les blocages concernant les consultations sensibles, les contrats et les copies fournisseurs avant toute utilisation réelle.
+> **État du 22 novembre 2026 : préparation, pas de conformité globale déclarée.** Les protections techniques sont vérifiées, mais l’anonymat contre l’exploitant n’est pas garanti. Lire la documentation priv?e d?exploitation pour les blocages concernant les consultations sensibles, les contrats et les copies fournisseurs avant toute utilisation réelle.
 
 Le dossier `cloudflare/` contient la version de production. Aucun mode simulation n'est activé par son point d'entrée `worker.py`. L'interface, les styles et le vote sont ceux du site original ; les changements portent sur la vérification universitaire et la délivrance du code personnel.
 
@@ -43,7 +43,7 @@ Les migrations 005 à 009 sont rejouables. Appliquer 005/006 si elles ne sont pa
 
 ## Confidentialité
 
-Le mail transmet seulement un code de vérification à six chiffres. Le code d'AG est montré uniquement à l'électeur ; une empreinte de l'adresse empêche les doubles délivrances sans être enregistrée avec le code ou le bulletin. Il faut conserver son code car il n'y a pas de récupération par mail. Ce mécanisme n'est pas une garantie d'anonymat cryptographique contre un administrateur du serveur. Voir `CONFIDENTIALITE_ET_RGPD.md` pour les limites et les obligations à valider.
+Le mail transmet seulement un code de vérification à six chiffres. Le code d'AG est montré uniquement à l'électeur ; une empreinte de l'adresse empêche les doubles délivrances sans être enregistrée avec le code ou le bulletin. Il faut conserver son code car il n'y a pas de récupération par mail. Ce mécanisme n'est pas une garantie d'anonymat cryptographique contre un administrateur du serveur. Voir la documentation priv?e d?exploitation pour les limites et les obligations à valider.
 
 ## Vérifications
 
@@ -57,7 +57,7 @@ Vérifier le cron toutes les cinq minutes : il retire les OTP et compteurs expir
 
 Les résultats publics et administrateur restent masqués jusqu’à la fin programmée, même si un sujet est fermé plus tôt. Ils restent aussi masqués si moins de six votes, moins de deux choix représentés ou un choix représenté par moins de trois votes. Ce seuil réduit des risques de déduction, sans garantir l’anonymat face aux observations extérieures ou à la collusion.
 
-Le responsable (Achille Thibon-Soula), le contact et la conservation active de 30 jours sont renseignés dans `NOTICE_RGPD_A_COMPLETER.md`. Finaliser la base légale, la condition pour les sujets politiques/syndicaux et les conditions des prestataires, puis rendre la notice validée disponible lors de la collecte. Aucun SSO autorisé n’est disponible : le système limite les codes par adresse universitaire, pas par personne physique.
+Le responsable (Achille Thibon-Soula), le contact et la conservation active de 30 jours sont renseignés dans la documentation priv?e d?exploitation. Finaliser la base légale, la condition pour les sujets politiques/syndicaux et les conditions des prestataires, puis rendre la notice validée disponible lors de la collecte. Aucun SSO autorisé n’est disponible : le système limite les codes par adresse universitaire, pas par personne physique.
 
 ## Conservation à 30 jours — mise à jour du 22 novembre 2026
 
