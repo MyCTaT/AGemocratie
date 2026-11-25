@@ -28,6 +28,7 @@ from fastapi import FastAPI, HTTPException, Request, Path as PathParam
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from workers import asgi, env as cloudflare_env
+from security_controls import RequestLimitsMiddleware, consume_attempts, protect_results, maintenance
 
 DOSSIER = Path(__file__).resolve().parent
 PARIS = ZoneInfo("Europe/Paris")
@@ -37,9 +38,9 @@ COOKIE_CODE_REVEAL = "__Host-ag_code_reveal"
 DUREE_ACCES_AG = 4 * 60 * 60
 DUREE_SESSION = 4 * 60 * 60
 DUREE_LIMITE = 15 * 60
-ITERATIONS_MIN = 100_000  # accepte les empreintes existantes, qui seront renforcées à la connexion
+ITERATIONS_MIN = 100_000
 ITERATIONS_MAX = 1_000_000
-ITERATIONS_COURANTES = 600_000
+ITERATIONS_COURANTES = 100_000
 MOT_DE_PASSE_MIN = 16
 
 modeles = Environment(loader=FileSystemLoader(str(DOSSIER / "templates")),
@@ -74,6 +75,7 @@ modeles.filters.update(local_date=_local_date, local_input=_local_input)
 logger = logging.getLogger("agemocratie.security")
 app = FastAPI(title="AGémocratie Cloudflare", docs_url=None,
               redoc_url=None, openapi_url=None)
+app.add_middleware(RequestLimitsMiddleware)
 
 
 @app.middleware("http")
@@ -81,7 +83,9 @@ async def securite(requete: Request, suivant):
     try:
         reponse = await suivant(requete)
     except Exception:
-        logger.exception("worker_error path=%s method=%s", requete.url.path, requete.method)
+
+
+        logger.error("worker_error")
         reponse = HTMLResponse("Service indisponible", status_code=500)
     reponse.headers["X-Content-Type-Options"] = "nosniff"
     reponse.headers["X-Frame-Options"] = "DENY"
@@ -100,7 +104,7 @@ async def securite(requete: Request, suivant):
 
 @app.exception_handler(Exception)
 async def erreur_interne(requete: Request, erreur: Exception):
-    logger.exception("worker_error path=%s method=%s", requete.url.path, requete.method)
+    logger.error("worker_error")
     return HTMLResponse("Service indisponible", status_code=500)
 
 
@@ -117,8 +121,8 @@ def _cle_valide(cle):
 
 
 def _secret(requete):
-    # Le binding global est documenté par Cloudflare pour les Python Workers.
-    # Le binding ASGI reste disponible en secours selon le contexte d'exécution.
+
+
     for environnement in (cloudflare_env, requete.scope.get("env")):
         if environnement is None:
             continue
@@ -153,7 +157,11 @@ def _secret_legacy_codes(requete):
             cle = cle.to_py()
         if _cle_valide(cle):
             return cle.encode("utf-8")
-    raise HTTPException(503, detail="Service indisponible")
+        if cle is not None:
+            raise HTTPException(503, detail="Service indisponible")
+
+
+    return _secret(requete)
 
 def _objet(ligne):
     if ligne is None:
@@ -202,7 +210,7 @@ def _csrf_contenu(jeton, secret):
 
 
 def _csrf_valide(requete, secret, formulaire):
-    
+
     origine = requete.headers.get("origin")
 
     if origine:
@@ -232,7 +240,7 @@ def _csrf_valide(requete, secret, formulaire):
 
 
 def _creer_session(secret, compte):
-    # Les rôles ne sont pas dans le cookie : toujours relire D1.
+
     expiration = int(time.time()) + DUREE_SESSION
     contenu = {"i": int(compte["id"]), "v": int(compte["auth_version"]),
                "e": expiration, "n": secrets.token_urlsafe(12)}
@@ -337,7 +345,6 @@ def _scrutin(ligne):
     }
 
 
-
 def _entier_formulaire(valeur, nom):
     texte = str(valeur or "")
     if not re.fullmatch(r"[0-9]{1,16}", texte):
@@ -408,7 +415,7 @@ async def _verifie_mdp(mot_de_passe: str, valeur: str):
 
 
 async def _hash_mdp(mot_de_passe):
-    # Pour les créations et changements de comptes en ligne.
+
     from js import crypto, TextEncoder, Uint8Array, Object
     from pyodide.ffi import to_js
     sel = secrets.token_bytes(16)
@@ -431,7 +438,8 @@ def _iterations_mdp(valeur):
 
 
 def _portees(requete, identifiant, secret):
-    return [(_signature(secret, f"login-ip:{_ip_normalisee(requete)}".encode()), 30)]
+    return [(_signature(secret, f"login-ip:{_ip_normalisee(requete)}".encode()), 60),
+            (_signature(secret, f"login-account:{identifiant.lower()}".encode()), 20)]
 
 
 def _ip_normalisee(requete):
@@ -570,7 +578,7 @@ async def page_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1, le=9_0
     compte = await _compte(requete)
     code_id = await _acces_ag(requete, id_ag)
     if code_id is None:
-        return _rendu(requete, "ag_access.html", compte=compte, ag=ag)
+        return await _page_acces_mail(requete, ag, compte)
     lignes = await _bdd(requete).prepare("""
         SELECT s.id,s.assemblee_id,s.titre,s.description,s.debut_utc,s.fin_utc,
                s.ferme_manuellement,
@@ -591,8 +599,8 @@ async def page_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1, le=9_0
 
 def _portees_code_ag(requete: Request, secret: bytes, id_ag: Annotated[int, PathParam(ge=1, le=9_007_199_254_740_991)]):
     ip = _ip_normalisee(requete)
-    # Une limite par AG permettrait à un seul visiteur de bloquer tous les électeurs.
-    return [(_signature(secret, f"ag-ip:{id_ag}:{ip}".encode()), 12)]
+
+    return [(_signature(secret, f"ag-ip:{id_ag}:{ip}".encode()), 1000)]
 
 
 @app.post("/ag/{id_ag}/access")
@@ -604,7 +612,7 @@ async def entrer_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1, le=9
     code = str(form.get("code", "")).strip()
     bdd = _bdd(requete)
     portees = _portees_code_ag(requete, secret, id_ag)
-    if await _limite(bdd, portees):
+    if not await consume_attempts(bdd, portees):
         return _rendu(requete, "ag_access.html", statut=429,
                       ag=await _ag_detail(requete, id_ag),
                       error="Trop de tentatives. Réessayez dans 15 minutes.")
@@ -617,7 +625,6 @@ async def entrer_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1, le=9
             "AND revoque_le IS NULL AND (expire_le IS NULL OR expire_le>?)"
         ).bind(id_ag, empreinte_nouvelle, empreinte_ancienne, int(time.time())).first())
     if ligne is None:
-        await _echec(bdd, portees)
         return _rendu(requete, "ag_access.html", statut=401,
                       ag=await _ag_detail(requete, id_ag),
                       error="Code d'accès invalide.")
@@ -635,6 +642,20 @@ async def quitter_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1, le=
     reponse = _lien("/")
     reponse.delete_cookie(_cookie_ag(id_ag), path="/", secure=True, httponly=True, samesite="lax")
     return reponse
+
+
+async def _resultats_proteges(requete, scrutin):
+
+    if not scrutin.get('ends_at') or int(time.time()) < scrutin['ends_at']:
+        return None
+    identifiant = scrutin['id']
+    rows = _lignes(await _bdd(requete).prepare("""
+        SELECT c.id,c.intitule,
+          ((SELECT count(*) FROM votes v WHERE v.choix_id=c.id AND v.scrutin_id=?)
+          +(SELECT count(*) FROM ag_bulletins v WHERE v.choix_id=c.id AND v.scrutin_id=?)) AS total
+        FROM choix c WHERE c.scrutin_id=? ORDER BY c.position
+    """).bind(identifiant,identifiant,identifiant).all())
+    return protect_results(rows)
 
 
 @app.get("/ag/{id_ag}/vote/{id_sujet}")
@@ -656,16 +677,7 @@ async def page_vote_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1, l
     options = _lignes(await _bdd(requete).prepare(
         "SELECT id,intitule FROM choix WHERE scrutin_id=? ORDER BY position"
     ).bind(id_sujet).all())
-    resultats = None
-    if sujet["phase"] == "ended":
-        # Résultats uniquement après la clôture, votes historiques inclus.
-        comptes = _lignes(await _bdd(requete).prepare("""
-            SELECT c.id,c.intitule,
-              ((SELECT count(*) FROM votes v WHERE v.choix_id=c.id AND v.scrutin_id=?)
-              +(SELECT count(*) FROM ag_bulletins v WHERE v.choix_id=c.id AND v.scrutin_id=?)) AS total
-            FROM choix c WHERE c.scrutin_id=? ORDER BY c.position
-        """).bind(id_sujet, id_sujet, id_sujet).all())
-        resultats = comptes
+    resultats = await _resultats_proteges(requete, sujet) if sujet["phase"] == "ended" else None
     return _rendu(requete, "ag_vote.html", ag=ag, poll=sujet, options=options,
                   deja_vote=dej is not None, resultats=resultats)
 
@@ -681,9 +693,8 @@ async def enregistrer_vote_ag(requete: Request, id_ag: Annotated[int, PathParam(
         choix_id = _entier_formulaire(form.get("option_id"), "Choix")
     except ValueError:
         raise HTTPException(400, detail="Choix invalide") from None
-    # L'insertion unique, effectuée par D1, résiste aux soumissions concurrentes.
-    # La vérification de l'AG et du créneau du sujet est faite en SQL,
-    # dans la même instruction que l'insertion du vote.
+
+
     bdd = _bdd(requete)
     emargement = bdd.prepare("""
         INSERT OR IGNORE INTO ag_emargements(code_id,scrutin_id,assemblee_id)
@@ -738,7 +749,7 @@ async def connexion(requete: Request):
         raise HTTPException(400, detail="Données incorrectes")
     bdd = _bdd(requete)
     portees = _portees(requete, identifiant, secret)
-    if await _limite(bdd, portees):
+    if not await consume_attempts(bdd, portees):
         return _rendu(requete, "login.html", statut=429,
                       error="Trop de tentatives. Réessayez dans 15 minutes.")
     compte = _objet(await bdd.prepare(
@@ -747,11 +758,10 @@ async def connexion(requete: Request):
     ).bind(identifiant).first())
     valide = False
     empreinte_verifiee = compte["mot_de_passe_hash"] if compte else (
-        "pbkdf2_sha256$100000$" + "00" * 16 + "$" + "00" * 32)
+        f"pbkdf2_sha256${ITERATIONS_COURANTES}$" + "00" * 16 + "$" + "00" * 32)
     valide = await _verifie_mdp(mot_de_passe or "\x00", empreinte_verifiee)
     valide = bool(compte and valide)
     if not valide:
-        await _echec(bdd, portees)
         return _rendu(requete, "login.html", statut=401,
                       error="Identifiant ou mot de passe incorrect.")
     if _iterations_mdp(compte["mot_de_passe_hash"]) < ITERATIONS_COURANTES:
@@ -759,8 +769,8 @@ async def connexion(requete: Request):
         await bdd.prepare(
             "UPDATE administrateurs SET mot_de_passe_hash=? WHERE id=? AND mot_de_passe_hash=?"
         ).bind(nouvelle_empreinte, int(compte["id"]), compte["mot_de_passe_hash"]).run()
-    # Supprimer seulement les échecs de cet identifiant ; une IP à attaques
-    # multiples reste temporairement limitée par son compteur.
+
+
     reponse = _lien("/admin")
     reponse.set_cookie(SESSION, _creer_session(secret, compte),
                        max_age=DUREE_SESSION, httponly=True,
@@ -869,33 +879,7 @@ async def generer_code_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1
     _csrf_valide(requete, _secret(requete), form)
     ag = await _ag_detail(requete, id_ag)
     _autoriser_gestion(compte, ag.get("created_by"))
-    secret = _secret(requete)
-    bdd = _bdd(requete)
-    for _ in range(5):
-        code = f"{secrets.randbelow(10**12):012d}"
-        empreinte = _empreinte_code_ag(_secret_codes(requete), id_ag, code)
-        id_code = secrets.randbelow(2**52 - 2**40) + 2**40
-        jeton = secrets.token_hex(24)
-        nonce = secrets.token_urlsafe(24)
-        expiration = int(time.time()) + 90 * 24 * 60 * 60
-        operations = await bdd.batch([
-            bdd.prepare("""INSERT OR IGNORE INTO ag_codes
-                (id,assemblee_id,empreinte_code,jeton_acces,expire_le,revelation_hash)
-                VALUES (?,?,?,?,?,?)""").bind(id_code,id_ag,empreinte,jeton,expiration,
-                    _signature(secret,("code-reveal:"+nonce).encode())),
-            bdd.prepare("""INSERT INTO journal_admin(admin_id,action,cible_type,cible_id)
-                SELECT ?, 'create_code', 'ag_code', ? WHERE changes()=1""").bind(
-                    int(compte["id"]), str(id_code)),
-        ])
-        if int(operations[0].meta.changes) != 1:
-            continue
-        payload={"a":id_ag,"c":code,"i":id_code,"e":int(time.time())+300,"n":nonce}
-        enc=base64.urlsafe_b64encode(json.dumps(payload,separators=(",",":")).encode()).rstrip(b"=").decode()
-        value=enc+"."+_signature(secret,b"reveal:"+enc.encode())
-        response=_lien(f"/admin/ags/{id_ag}/codes/reveal")
-        response.set_cookie(COOKIE_CODE_REVEAL,value,max_age=300,secure=True,httponly=True,samesite="strict",path="/")
-        return response
-    raise HTTPException(503, detail="G?n?ration de code indisponible")
+    raise HTTPException(403, detail="Le participant génère son code après vérification de son adresse universitaire.")
 
 
 @app.get("/admin/ags/{id_ag}/codes/reveal")
@@ -973,7 +957,7 @@ async def supprimer_ag(requete: Request, id_ag: Annotated[int, PathParam(ge=1, l
         bdd.prepare("DELETE FROM assemblees WHERE id=?").bind(id_ag),
         bdd.prepare("INSERT INTO journal_admin(admin_id,action,cible_type,cible_id) VALUES (?,'delete_ag','ag',?)").bind(int(compte["id"]),str(id_ag)),
     ])
-    if int(resultats[7].meta.changes) != 1:
+    if int(resultats[7].meta.changes) < 1:
         raise HTTPException(409,detail="AG introuvable ou modifi?e")
     return _lien("/admin?deleted_ag=1")
 
@@ -1058,14 +1042,7 @@ async def detail_scrutin(requete: Request, id_sujet: Annotated[int, PathParam(ge
         "SELECT id,intitule,position FROM choix WHERE scrutin_id=? ORDER BY position"
     ).bind(id_sujet).all()
     options = _lignes(resultat)
-    resultats = None
-    if scrutin["phase"] == "ended":
-        resultats = _lignes(await _bdd(requete).prepare("""
-            SELECT c.intitule,
-              ((SELECT count(*) FROM votes v WHERE v.choix_id=c.id AND v.scrutin_id=?)
-              +(SELECT count(*) FROM ag_bulletins v WHERE v.choix_id=c.id AND v.scrutin_id=?)) AS total
-            FROM choix c WHERE c.scrutin_id=? ORDER BY c.position
-        """).bind(id_sujet,id_sujet,id_sujet).all())
+    resultats = await _resultats_proteges(requete, scrutin) if scrutin["phase"] == "ended" else None
     return _rendu(requete, "poll_manage.html", compte=compte, poll=scrutin,
                   ag=await _ag_detail(requete, scrutin["ag_id"]), options=options,
                   resultats=resultats, phase=scrutin["phase"],
@@ -1148,7 +1125,7 @@ async def supprimer_scrutin(requete: Request, id_sujet: Annotated[int, PathParam
         bdd.prepare("DELETE FROM scrutins WHERE id=?").bind(id_sujet),
         bdd.prepare("INSERT INTO journal_admin(admin_id,action,cible_type,cible_id) VALUES (?,'delete_poll','poll',?)").bind(int(compte["id"]),str(id_sujet)),
     ])
-    if int(resultats[5].meta.changes) != 1:
+    if int(resultats[5].meta.changes) < 1:
         raise HTTPException(409, detail="Scrutin introuvable ou modifi?")
     return _lien("/admin?deleted=1")
 
@@ -1180,7 +1157,7 @@ async def creer_compte(requete: Request):
     mdp = str(form.get("password", ""))
     if not re.fullmatch(r"[a-z0-9_-]{3,32}", utilisateur) or not MOT_DE_PASSE_MIN <= len(mdp) <= 256:
         raise HTTPException(400, detail="Identifiant ou mot de passe invalide")
-    # Un doublon n'entraîne pas de calcul PBKDF2 inutile.
+
     doublon = await _bdd(requete).prepare(
         "SELECT 1 FROM administrateurs WHERE lower(identifiant)=?"
     ).bind(utilisateur).first()
@@ -1260,7 +1237,7 @@ async def supprimer_compte(requete: Request, id_administrateur: Annotated[int, P
         bdd.prepare("DELETE FROM administrateurs WHERE id=? AND role='admin' AND identifiant=?").bind(id_administrateur,ligne["identifiant"]),
         bdd.prepare("INSERT INTO journal_admin(admin_id,action,cible_type,cible_id) SELECT ?,'delete_admin','admin',? WHERE changes()=1").bind(int(compte["id"]),str(id_administrateur)),
     ])
-    if int(resultats[0].meta.changes) != 1:
+    if int(resultats[0].meta.changes) < 1:
         raise HTTPException(409, detail="Compte introuvable ou modifi?")
     return _lien("/admin/users?removed=1")
 
@@ -1282,4 +1259,13 @@ async def ancienne_route_introuvable():
     raise HTTPException(404, detail="Introuvable")
 
 
-Default = asgi.entrypoint(app)
+from email_access import installer as _installer_acces_mail
+_page_acces_mail = _installer_acces_mail(app, globals())
+
+class Default(asgi.entrypoint(app)):
+    async def scheduled(self, controller, env=None, ctx=None):
+        bindings = env if env is not None else self.env
+        key = getattr(bindings, 'AG_CODE_KEY', '')
+        if hasattr(key, 'to_py'): key = key.to_py()
+        if not _cle_valide(key): raise RuntimeError('Configuration de maintenance invalide')
+        await maintenance(bindings.DB, key.encode())

@@ -1,5 +1,3 @@
--- Migration à appliquer après sauvegarde D1 et avant le Worker correspondant.
--- Sépare l'émargement du bulletin pour empêcher de relier un code à son choix.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_choix_id_scrutin
     ON choix(id,scrutin_id);
 CREATE INDEX IF NOT EXISTS idx_ag_votes_choix ON ag_votes(choix_id);
@@ -46,7 +44,7 @@ CREATE TABLE ag_bulletins (
 ) WITHOUT ROWID;
 CREATE INDEX idx_ag_bulletins_scrutin ON ag_bulletins(scrutin_id, choix_id);
 
--- Conserve les participations et les totaux historiques sans conserver le lien code/choix.
+
 INSERT OR IGNORE INTO ag_emargements(code_id, scrutin_id, assemblee_id)
 SELECT code_id, scrutin_id, assemblee_id FROM ag_votes;
 INSERT INTO ag_bulletins(bulletin_id, scrutin_id, choix_id)
@@ -82,5 +80,3 @@ WHEN NOT (length(NEW.debut_utc)=20 AND NEW.debut_utc GLOB '[0-9][0-9][0-9][0-9]-
 BEGIN
     SELECT RAISE(ABORT,'invalid poll schedule');
 END;
-
--- L'ancienne table est désormais inutile et relie directement le code au choix.

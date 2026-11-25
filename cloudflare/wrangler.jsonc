@@ -7,8 +7,14 @@
     "python_workers_314"
   ],
   "secrets": {
-    "required": ["APP_SECRET_KEY", "AG_CODE_KEY", "LEGACY_AG_CODE_KEY"]
+    "required": [
+      "APP_SECRET_KEY",
+      "AG_CODE_KEY",
+      "AG_MAIL_URL",
+      "AG_MAIL_SECRET"
+    ]
   },
+  "vars": {"AG_MAIL_PROVIDER": "gmail"},
   "d1_databases": [
     {
       "binding": "DB",
@@ -21,7 +27,14 @@
   },
   "preview_urls": false,
   "observability": {
-    "enabled": true,
-    "logs": { "invocation_logs": true }
+    "enabled": false,
+    "logs": {
+      "invocation_logs": false
+    }
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
   }
 }

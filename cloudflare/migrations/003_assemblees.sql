@@ -1,6 +1,3 @@
--- AGémocratie / D1 : une AG contient plusieurs sujets.
--- IMPORTANT : sauvegarder la base et exécuter UNE seule fois sur la D1 DISTANTE.
--- Ne pas appliquer la migration avant d'avoir prévu le nouveau Worker.
 CREATE TABLE assemblees (
     id INTEGER PRIMARY KEY,
     titre TEXT NOT NULL,
@@ -12,7 +9,7 @@ CREATE TABLE assemblees (
 ALTER TABLE scrutins ADD COLUMN assemblee_id INTEGER
     REFERENCES assemblees(id) ON DELETE CASCADE;
 
--- Préserver les sujets existants, même anciens, dans une AG d'archives.
+
 INSERT INTO assemblees (id, titre, description)
 SELECT 1, 'AG historique', 'Sujets présents avant le passage aux AG.'
 WHERE EXISTS (SELECT 1 FROM scrutins WHERE assemblee_id IS NULL);
