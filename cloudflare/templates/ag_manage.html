@@ -19,7 +19,7 @@
 <p class="muted">Les participants génèrent leur code personnel sur la page publique de l’AG après vérification de leur adresse universitaire. Un même code sert pour tous les sujets, une seule voix par sujet.</p>
 </section>
 <a class="button button-secondary" href="/ag/{{ ag.id }}">Voir la page publique de l'AG</a>
-{% if is_owner or ag.created_by == admin_id %}
+{% if is_admin %}
 <section class="card panel panel-spaced">
 <h2>Supprimer cette AG</h2><p class="muted">Attention : suppression irréversible de tous ses sujets, votes et codes.</p>
 <form action="/admin/ags/{{ ag.id }}/delete" method="post" class="form-stack">

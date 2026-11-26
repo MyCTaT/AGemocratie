@@ -13,7 +13,7 @@ Le rapport RAPPORT_2026-11-10.md décrit l’état **avant** ces correctifs et r
 | Conservation technique | Cron toutes les 5 minutes : OTP et compteurs expirés purgés, migration progressive des anciens pseudonymes. Les durées de conservation de l’AG, des sauvegardes et des journaux doivent encore être décidées et appliquées avec l’organisateur. |
 | A01 opérateur serveur / instantanés | **Non résolu cryptographiquement.** Le serveur reçoit le vote en clair et les opérations peuvent être rapprochées par un opérateur technique. Les protections de publication ne chiffrent pas les bulletins contre l’hébergeur. Une autre architecture auditée est nécessaire pour cette menace. |
 | I01 accès aux mails / I02 plusieurs adresses | **Limites conservées et déclarées.** L’utilisateur n’a pas d’accès autorisé au SSO universitaire. Le logiciel ne peut pas prouver l’unicité d’une personne ni distinguer le véritable destinataire d’un tiers capable de lire ses OTP. Ne pas annoncer une personne/une voix certifiée. |
-| RGPD | Brouillon NOTICE_RGPD_A_COMPLETER.md préparé ; responsable/contact, base légale, contrats/transferts et durée de vie des données d’AG restent à valider. Pas de conformité automatique ni d’identité d’organisateur inventée. |
+| RGPD | Brouillon de notice de confidentialit? préparé ; responsable/contact, base légale, contrats/transferts et durée de vie des données d’AG restent à valider. Pas de conformité automatique ni d’identité d’organisateur inventée. |
 
 Le code d’AG reste affiché uniquement sur le site, jamais envoyé par mail. Son mot de passe admin initial n’a pas été publié ou remplacé. Les clés MFA et les configurations locales restent privées et sont exclues de l’archive Git.
 
