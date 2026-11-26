@@ -13,7 +13,7 @@
 <label for="title">Question ou sujet</label>
 <input type="text" name="title" id="title" minlength="3" maxlength="140" value="{{ title_value|default('') }}" required placeholder="Ex. Approbation du budget ?">
 <label for="description">Description (facultative)</label>
-<textarea id="description" name="description" rows="3" maxlength="600">{{ description_value|default('') }}</textarea>
+<textarea id="description" name="description" rows="3" maxlength="5000">{{ description_value|default('') }}</textarea>
 <label for="options">Réponses possibles (une par ligne)</label>
 <textarea id="options" name="options" rows="6" required placeholder="Oui&#10;Non&#10;Abstention">{{ options_value|default('') }}</textarea>
 <div class="hint">Entre 2 et 10 réponses différentes.</div>

@@ -830,7 +830,7 @@ async def creer_ag(requete: Request):
     _csrf_valide(requete, _secret(requete), form)
     titre = str(form.get("title", "")).strip()
     description = str(form.get("description", "")).strip()
-    if not (3 <= len(titre) <= 140 and len(description) <= 600):
+    if not (3 <= len(titre) <= 140 and len(description) <= 5000):
         return _rendu(requete, "ag_new.html", compte=compte, statut=400,
                       titre=titre, description=description,
                       error="Titre ou description invalide.")
@@ -993,7 +993,7 @@ async def creer_scrutin(requete: Request):
     description = str(form.get("description", "")).strip()
     propositions = [p.strip() for p in str(form.get("options", "")).splitlines() if p.strip()]
     horaires = _horaires(form)
-    if not (3 <= len(titre) <= 140 and len(description) <= 600
+    if not (3 <= len(titre) <= 140 and len(description) <= 5000
             and 2 <= len(propositions) <= 10
             and all(len(p) <= 140 for p in propositions)
             and len({p.casefold() for p in propositions}) == len(propositions)

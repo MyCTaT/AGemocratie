@@ -12,7 +12,7 @@
       <label for="title">Question ou titre du vote</label>
       <input type="text" name="title" id="title" minlength="3" maxlength="140" value="{{ title_value|default('') }}" required placeholder="Ex. Quel projet souhaitez-vous soutenir ?">
       <label for="description">Description <span class="muted">(facultative)</span></label>
-      <textarea id="description" name="description" rows="3" maxlength="600" placeholder="Précisez le contexte du vote...">{{ description_value|default('') }}</textarea>
+      <textarea id="description" name="description" rows="3" maxlength="5000" placeholder="Précisez le contexte du vote...">{{ description_value|default('') }}</textarea>
       <label for="options">Réponses possibles</label>
       <textarea id="options" name="options" rows="7" required placeholder="Oui&#10;Non&#10;Abstention">{{ options_value|default('') }}</textarea>
       <div class="hint">Une réponse par ligne, entre 2 et 10 réponses différentes.</div>

@@ -562,7 +562,7 @@ async def create_poll(requete: Request):
     description = str(formulaire.get("description", "")).strip()
     propositions = [proposition.strip() for proposition in str(formulaire.get("options", "")).splitlines() if proposition.strip()]
     horaires = schedule_from_form(formulaire)
-    if not (3 <= len(titre) <= 140 and len(description) <= 600
+    if not (3 <= len(titre) <= 140 and len(description) <= 5000
             and 2 <= len(propositions) <= 10 and all(len(proposition) <= 140 for proposition in propositions)
             and len(set(proposition.casefold() for proposition in propositions)) == len(propositions)
             and horaires is not None):
