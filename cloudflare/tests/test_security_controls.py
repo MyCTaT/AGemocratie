@@ -137,6 +137,28 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(db.execute('SELECT count(*) FROM assemblees WHERE id=2').fetchone()[0],1)
         db.close()
 
+    def test_admin_edits_description_after_publication_without_changing_votes(self):
+        f=self.second_admin();db=f.db.connect()
+        db.execute("INSERT INTO ag_bulletins(bulletin_id,scrutin_id,choix_id) VALUES ('existing',11,110)")
+        before=tuple(db.execute('SELECT titre,debut_utc,fin_utc FROM scrutins WHERE id=11').fetchone());db.close()
+        r=f.client.get('/admin/polls/11');t=re.search(r'name="csrf_token" value="([^"]+)"',r.text)[1]
+        self.assertIn('/admin/polls/11/description',r.text)
+        r=f.client.post('/admin/polls/11/description',data={'csrf_token':t,'description':'<script>test</script>'})
+        self.assertEqual(r.status_code,200);self.assertIn('&lt;script&gt;test&lt;/script&gt;',r.text)
+        db=f.db.connect()
+        self.assertEqual(tuple(db.execute('SELECT titre,debut_utc,fin_utc FROM scrutins WHERE id=11').fetchone()),before)
+        self.assertEqual(db.execute('SELECT count(*) FROM ag_bulletins').fetchone()[0],1)
+        self.assertEqual(db.execute("SELECT admin_id FROM journal_admin WHERE action='edit_description'").fetchone()[0],2)
+        db.execute('UPDATE scrutins SET ferme_manuellement=1 WHERE id=11');db.close()
+        self.assertEqual(f.client.post('/admin/polls/11/description',data={'csrf_token':t,'description':''},follow_redirects=False).status_code,303)
+
+    def test_description_length_and_csrf_enforced(self):
+        f=self.second_admin();r=f.client.get('/admin/polls/11');t=re.search(r'name="csrf_token" value="([^"]+)"',r.text)[1]
+        self.assertEqual(f.client.post('/admin/polls/11/description',data={'description':'blocked'}).status_code,403)
+        self.assertEqual(f.client.post('/admin/polls/11/description',data={'csrf_token':t,'description':'x'*5000},follow_redirects=False).status_code,303)
+        self.assertEqual(f.client.post('/admin/polls/11/description',data={'csrf_token':t,'description':'x'*5001}).status_code,400)
+        db=f.db.connect();self.assertEqual(len(db.execute('SELECT description FROM scrutins WHERE id=11').fetchone()[0]),5000);db.close()
+
     def test_login_with_password_only_and_logout(self):
         f=self.f
         async def check(password,stored):return password=='correct'

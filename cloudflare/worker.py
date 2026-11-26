@@ -1048,7 +1048,27 @@ async def detail_scrutin(requete: Request, id_sujet: Annotated[int, PathParam(ge
                   resultats=resultats, phase=scrutin["phase"],
                   created=requete.query_params.get("created") == "1",
                   schedule_saved=requete.query_params.get("schedule_saved") == "1",
+                  description_saved=requete.query_params.get("description_saved") == "1",
                   closed=requete.query_params.get("closed") == "1")
+
+
+@app.post("/admin/polls/{id_sujet}/description")
+async def modifier_description(requete: Request, id_sujet: Annotated[int, PathParam(ge=1, le=9_007_199_254_740_991)]):
+    compte, refus = await _auth(requete)
+    if refus:
+        return refus
+    form = await requete.form()
+    _csrf_valide(requete, _secret(requete), form)
+    scrutin = await _detail_scrutin(requete, id_sujet)
+    _autoriser_gestion(compte, scrutin.get("created_by"))
+    description = str(form.get("description", "")).strip()
+    if len(description) > 5000:
+        raise HTTPException(400, detail="Description trop longue (5000 caract\u00e8res maximum).")
+    await _bdd(requete).batch([
+        _bdd(requete).prepare("UPDATE scrutins SET description=? WHERE id=?").bind(description, id_sujet),
+        _bdd(requete).prepare("INSERT INTO journal_admin(admin_id,action,cible_type,cible_id) SELECT ?,'edit_description','poll',? WHERE changes()=1").bind(int(compte["id"]), str(id_sujet)),
+    ])
+    return _lien(f"/admin/polls/{id_sujet}?description_saved=1")
 
 
 @app.post("/admin/polls/{id_sujet}/schedule")
@@ -1242,6 +1262,10 @@ async def supprimer_compte(requete: Request, id_administrateur: Annotated[int, P
     return _lien("/admin/users?removed=1")
 
 
+from faq import installer as _installer_faq, purger_questions as _purger_questions_faq
+_installer_faq(app, globals())
+
+
 @app.get("/admin/")
 async def admin_slash():
     return _lien("/admin")
@@ -1269,3 +1293,4 @@ class Default(asgi.entrypoint(app)):
         if hasattr(key, 'to_py'): key = key.to_py()
         if not _cle_valide(key): raise RuntimeError('Configuration de maintenance invalide')
         await maintenance(bindings.DB, key.encode())
+        await _purger_questions_faq(bindings.DB)

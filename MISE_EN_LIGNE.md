@@ -140,3 +140,8 @@ Contr?le final : le correctif est publi? (version 86cf034c-816e-4cb8-af9f-3a2d69
 
 
 Relais Gmail version 3 : le nettoyage utilise l?identifiant immuable renvoy? par l?API Gmail, le label SENT et les marqueurs du site. Les nouveaux envois portent aussi un identifiant de requ?te v?rifi?. Le Message-ID r??crit par Gmail ne bloque plus les copies d?j? enregistr?es dans la file de reprise. Les tests reproduisent cette r??criture et contr?lent le refus d?un marqueur incorrect.
+
+
+## FAQ
+
+Avant de publier la FAQ, appliquer une fois la migration rejouable `010_faq.sql` depuis `cloudflare/` : `npx wrangler d1 execute agemocratie-db --remote --file migrations/010_faq.sql`. Elle ajoute uniquement une table de questions ; ne pas rejouer les anciennes migrations. Publier ensuite les fichiers du site. Les participants utilisent `/faq`, les administrateurs `/admin/faq`. Le cron supprime les questions non publiées après 30 jours. Aucune question n’est publiée automatiquement et aucun mail de notification n’est envoyé. La FAQ est propre à la version Cloudflare.

@@ -24,3 +24,5 @@
 .public-disabled{opacity:.65;pointer-events:none;cursor:not-allowed}
 .public-empty{text-align:center;padding:32px}
 @media(max-width:650px){.public-poll-grid{grid-template-columns:1fr}.public-poll{padding:22px}}
+
+.faq-answer { white-space: pre-wrap; overflow-wrap: anywhere; }

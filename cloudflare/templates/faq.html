@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Questions fréquentes{% endblock %}
+{% block content %}
+<div class="center-narrow">
+  <div class="hero compact-hero"><div class="eyebrow">Besoin d'aide ?</div><h1>Questions fréquentes<span class="accent">.</span></h1><p class="subtitle">Retrouvez les réponses et posez votre question.</p></div>
+  <section class="card panel">
+    <details><summary>Comment obtenir mon code pour une AG ?</summary><p>Choisissez votre AG, vérifiez votre adresse universitaire avec le code reçu par mail, puis générez votre code personnel sur le site. Conservez-le pour les différents sujets de cette AG.</p></details>
+    <details><summary>Je ne reçois pas le mail de vérification.</summary><p>Vérifiez votre adresse et les indésirables de votre messagerie universitaire. Attendez quelques minutes. Si vous demandez un nouveau code, utilisez le plus récent.</p></details>
+    <details><summary>Puis-je changer mon vote ?</summary><p>Un vote enregistré est définitif. Relisez votre choix avant de confirmer.</p></details>
+    <details><summary>Où trouver les informations sur mes données ?</summary><p>Consultez la <a href="/documents/rgpd.txt">notice de confidentialité</a>.</p></details>
+    {% for item in questions %}<details><summary>{{ item.question }}</summary><p class="faq-answer">{{ item.reponse }}</p></details>{% endfor %}
+  </section>
+  <section class="card panel">
+    <h2>Poser une question</h2>
+    <p class="muted" id="question-help">Ne communiquez ni code de vote, ni mot de passe, ni information personnelle. Les administrateurs reçoivent votre question et peuvent la reformuler avant de publier une réponse ici. Aucune adresse mail n'est demandée.</p>
+    {% if sent %}<div class="notice" role="status">Votre question a été transmise aux administrateurs. Revenez sur cette page pour consulter les réponses publiées.</div>{% endif %}
+    {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+    <form action="/faq" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="question">Votre question</label>
+      <textarea id="question" name="question" rows="5" minlength="10" maxlength="1000" aria-describedby="question-help" required>{{ question_value }}</textarea>
+      <button class="button button-primary" type="submit">Envoyer ma question</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

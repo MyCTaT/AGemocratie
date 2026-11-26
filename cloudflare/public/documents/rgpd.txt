@@ -63,3 +63,8 @@ Précisez votre demande et l’AG concernée. N’envoyez ni code de vote, ni mo
 Une réponse est apportée en principe dans un mois. Lorsqu’une prolongation est applicable, elle est expliquée dans le premier mois. Les demandes sont traitées à partir des données disponibles, sans créer de nouvelle correspondance entre une identité et un bulletin.
 
 Vous pouvez adresser une réclamation à la CNIL : https://www.cnil.fr/fr/plaintes.
+
+
+## Questions envoyées dans la FAQ
+
+Le formulaire transmet uniquement le texte de votre question, sans demander de nom, de code de vote ou d’adresse mail. Les administrateurs peuvent consulter ce texte, le reformuler pour retirer des informations personnelles et publier une question avec sa réponse. Ne transmettez aucune information personnelle ou confidentielle. Les questions non publiées sont supprimées automatiquement après 30 jours ; les réponses publiées restent accessibles jusqu’à leur suppression par un administrateur. Les compteurs techniques de limitation des demandes sont temporaires, comme les autres protections du service. Pour demander la suppression d’un texte, utilisez le contact indiqué dans cette notice.

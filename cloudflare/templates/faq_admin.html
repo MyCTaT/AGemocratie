@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Gérer les questions{% endblock %}
+{% block content %}
+<div class="inner-page">
+  <a class="back-link" href="/admin">← Administration</a>
+  <h1>Questions des participants<span class="accent">.</span></h1>
+  <p class="subtitle">Retirez les informations personnelles avant de publier une question et sa réponse. Les questions sans réponse sont supprimées après 30 jours.</p>
+  {% if saved %}<div class="notice" role="status">Modification enregistrée.</div>{% endif %}
+  {% for item in questions %}
+  <section class="card panel">
+    <h2>{% if item.publie_le is not none %}Réponse publiée{% else %}Question en attente{% endif %}</h2>
+    <form action="/admin/faq/{{ item.id }}/publish" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="question-{{ item.id }}">Question à afficher</label>
+      <textarea id="question-{{ item.id }}" name="question" rows="3" minlength="10" maxlength="1000" required>{{ item.question }}</textarea>
+      <label for="answer-{{ item.id }}">Réponse</label>
+      <textarea id="answer-{{ item.id }}" name="answer" rows="5" maxlength="5000" required>{{ item.reponse }}</textarea>
+      <button type="submit" class="button button-primary">Publier la question et la réponse</button>
+    </form>
+    <form action="/admin/faq/{{ item.id }}/delete" method="post" class="section-action">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button button-danger" type="submit">Supprimer</button>
+    </form>
+  </section>
+  {% else %}<section class="card panel"><p>Aucune question reçue pour le moment.</p></section>{% endfor %}
+  <a href="/faq" class="button button-secondary">Voir la FAQ publique</a>
+</div>
+{% endblock %}

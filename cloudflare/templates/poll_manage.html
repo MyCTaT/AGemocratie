@@ -9,6 +9,16 @@
   {% if created %}<div class="notice" role="status">Scrutin créé. Tu peux gérer les dates ci-dessous.</div>{% endif %}
   {% if schedule_saved %}<div class="notice" role="status">Dates enregistrées.</div>{% endif %}
   {% if closed %}<div class="notice" role="status">Scrutin clôturé manuellement.</div>{% endif %}
+  {% if description_saved %}<div class="notice" role="status">Description enregistr&#233;e.</div>{% endif %}
+  <section class="card panel">
+    <h2>Description du sujet</h2>
+    <form action="/admin/polls/{{ poll.id }}/description" method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="description">Modifier la description (5 000 caract&#232;res maximum)</label>
+      <textarea id="description" name="description" rows="6" maxlength="5000">{{ poll.description }}</textarea>
+      <button class="button button-primary" type="submit">Enregistrer la description</button>
+    </form>
+  </section>
   <section class="card panel">
     <h2>Calendrier du vote</h2>
     <p>Début : <strong>{{ poll.starts_at|local_date }}</strong> · Fin : <strong>{{ poll.ends_at|local_date }}</strong> (heure de Paris).</p>
