@@ -292,8 +292,8 @@ async def _auth(requete, *, principal=False):
 
 
 def _autoriser_gestion(compte, createur_id):
-    if compte["role"] != "principal" and createur_id != int(compte["id"]):
-        raise HTTPException(403, detail="Action réservée au créateur ou au principal")
+    if compte["role"] not in ("admin", "principal"):
+        raise HTTPException(403, detail="Acc\u00e8s r\u00e9serv\u00e9 aux administrateurs")
 
 
 def _rendu(requete, nom, *, compte=None, statut=200, **contexte):

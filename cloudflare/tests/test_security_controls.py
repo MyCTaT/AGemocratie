@@ -102,6 +102,41 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(totp_step(seed,'287082',59),1)
         self.assertIsNone(totp_step(seed,'287082',121))
         self.assertIsNone(totp_step(seed,'123456789012',59))
+    def second_admin(self):
+        f=self.f;db=f.db.connect()
+        db.execute("INSERT INTO administrateurs(id,identifiant,mot_de_passe_hash,role) VALUES (2,'second','unused','admin')")
+        row=dict(db.execute('SELECT * FROM administrateurs WHERE id=2').fetchone());db.close()
+        f.client.cookies.set(f.worker.SESSION,f.worker._creer_session(f.env.APP_SECRET_KEY.encode(),row))
+        return f
+
+    def test_other_admin_can_read_ag_and_subject(self):
+        f=self.second_admin()
+        r=f.client.get('/admin/ags/1');self.assertEqual(r.status_code,200)
+        self.assertIn('/admin/ags/1/delete',r.text)
+        self.assertEqual(f.client.get('/admin/polls/11').status_code,200)
+        self.assertEqual(f.client.get('/admin/polls/new?ag_id=1').status_code,200)
+
+    def test_other_admin_can_close_subject_and_is_recorded(self):
+        f=self.second_admin();r=f.client.get('/admin/polls/11')
+        t=re.search(r'name="csrf_token" value="([^"]+)"',r.text)[1]
+        r=f.client.post('/admin/polls/11/close',data={'csrf_token':t},follow_redirects=False)
+        self.assertEqual(r.status_code,303,r.text)
+        db=f.db.connect()
+        self.assertEqual(tuple(db.execute('SELECT ferme_manuellement,ferme_par FROM scrutins WHERE id=11').fetchone()),(1,2))
+        self.assertEqual(db.execute("SELECT admin_id FROM journal_admin WHERE action='close_poll'").fetchone()[0],2)
+        db.close()
+
+    def test_other_admin_can_delete_ag_but_not_manage_accounts(self):
+        f=self.second_admin();r=f.client.get('/admin/ags/1')
+        t=re.search(r'name="csrf_token" value="([^"]+)"',r.text)[1]
+        self.assertEqual(f.client.get('/admin/users').status_code,403)
+        r=f.client.post('/admin/ags/1/delete',data={'csrf_token':t,'confirmation_titre':'AG une'},follow_redirects=False)
+        self.assertEqual(r.status_code,303,r.text)
+        db=f.db.connect()
+        self.assertEqual(db.execute('SELECT count(*) FROM assemblees WHERE id=1').fetchone()[0],0)
+        self.assertEqual(db.execute('SELECT count(*) FROM assemblees WHERE id=2').fetchone()[0],1)
+        db.close()
+
     def test_login_with_password_only_and_logout(self):
         f=self.f
         async def check(password,stored):return password=='correct'
