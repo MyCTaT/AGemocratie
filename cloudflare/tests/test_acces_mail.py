@@ -116,6 +116,41 @@ class MailTests(unittest.TestCase):
         t=self.token(client,ag);otp=self.sent[-1]['otp']
         r=client.post(f'/ag/{ag}/email/verify',data={'csrf_token':t,'otp':otp})
         self.assertEqual(r.status_code,200,r.text);return t
+    def test_mobile_reopens_email_step_with_persistent_cookies(self):
+        token=self.token()
+        r=self.client.post('/ag/1/email/send',data={'csrf_token':token,'email':'mobile@etu.sorbonne-universite.fr'},follow_redirects=False)
+        self.assertEqual(r.status_code,303)
+        self.assertEqual(r.headers['location'],'/ag/1/email')
+        self.assertIn('Max-Age=600',r.headers['set-cookie'])
+        self.assertIn('HttpOnly',r.headers['set-cookie'])
+        self.assertIn('Secure',r.headers['set-cookie'])
+        otp=self.sent[-1]['otp']
+        with TestClient(self.worker.app,base_url='https://testserver',headers={'origin':'https://testserver'}) as reopened:
+            for key,value in self.client.cookies.items():reopened.cookies.set(key,value)
+            r=reopened.get('/ag/1/email')
+            self.assertEqual(r.status_code,200)
+            self.assertIn('/email/verify',r.text)
+            self.assertEqual(r.headers['cache-control'],'no-store')
+            token=re.search(r'name="csrf_token" value="([^"]+)"',r.text)[1]
+            r=reopened.post('/ag/1/email/verify',data={'csrf_token':token,'otp':otp})
+            self.assertEqual(r.status_code,200)
+            self.assertTrue(str(r.url).endswith('/ag/1/email'))
+            self.assertIn('/email/generate',r.text)
+            self.assertIn('/email/generate',reopened.get('/ag/1/email').text)
+
+    def test_expired_or_other_browser_shows_email_recovery(self):
+        self.send()
+        db=self.db.connect();db.execute('UPDATE ag_mail_verifications SET expire_le=0');db.close()
+        r=self.client.get('/ag/1/email')
+        self.assertEqual(r.status_code,200)
+        self.assertNotIn('/email/verify',r.text)
+        self.assertIn('/email/send',r.text)
+        self.assertIn('role="alert"',r.text)
+        with TestClient(self.worker.app,base_url='https://testserver') as other:
+            r=other.get('/ag/1/email')
+            self.assertIn('role="alert"',r.text)
+            self.assertNotIn('/email/verify',r.text)
+
     def test_parcours_un_code_pour_plusieurs_sujets(self):
         t=self.verified();r=self.client.post('/ag/1/email/generate',data={'csrf_token':t})
         self.assertEqual(r.status_code,200,r.text)

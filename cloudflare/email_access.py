@@ -101,7 +101,13 @@ def installer(app, core):
                       and (row['verifie'] or int(row['essais']) < 5))
         return rendu(request, 'ag_access.html', compte=compte, ag=ag, statut=statut,
                      pending=active, verified=bool(active and row['verifie']),
+                     email_step=active or '/email' in request.url.path,
                      email_error=email_error, email_value=email_value)
+
+    @app.get('/ag/{id_ag}/email')
+    async def reprendre_verification(request: Request, id_ag: AgId):
+        ag = await detail(request, id_ag)
+        return await access_page(request, ag, await core['_compte'](request))
 
     async def rate_limit(request, email):
 
@@ -141,7 +147,7 @@ def installer(app, core):
                 raise HTTPException(503, "Le mail n'a pas pu être envoyé. Réessayez dans un instant.") from None
         except HTTPException as error:
             return await access_page(request, ag, statut=error.status_code, email_error=error.detail, email_value=value[:254])
-        response = lien(f'/ag/{id_ag}')
+        response = lien(f'/ag/{id_ag}/email')
         response.set_cookie(cookie(id_ag), token, max_age=600, secure=True, httponly=True, samesite='lax', path='/')
         return response
 
@@ -162,7 +168,7 @@ def installer(app, core):
                     otp_hash, row['token_hash'], id_ag, int(time.time())).run()
             current = await challenge(request, id_ag)
             if current and current['verifie']:
-                return lien(f'/ag/{id_ag}')
+                return lien(f'/ag/{id_ag}/email')
             error = 'Code de vérification incorrect (5 essais maximum).'
         return await access_page(request, ag, statut=400, email_error=error)
 
