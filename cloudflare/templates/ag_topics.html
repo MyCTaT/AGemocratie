@@ -20,7 +20,7 @@
 {% for poll in polls %}
 <a class="poll-row" href="/ag/{{ ag.id }}/vote/{{ poll.id }}">
 <span class="poll-main"><strong>{{ poll.title }}</strong>
-<small>{% if poll.deja_vote %}✓ Déjà voté{% elif poll.phase == 'open' %}Vote ouvert{% elif poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'invalid' %}Dates à vérifier{% else %}Terminé{% endif %}</small></span>
+<small>{% if poll.deja_vote %}✓ Déjà voté{% elif poll.phase == 'open' %}Vote ouvert{% elif poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'invalid' %}Dates à vérifier{% else %}Terminé{% endif %}</small>{% if poll.ends_at %}<small>Fin prévue : {{ poll.ends_at|local_date }} (heure de Paris)</small>{% endif %}</span>
 <span class="arrow">→</span>
 </a>
 {% endfor %}

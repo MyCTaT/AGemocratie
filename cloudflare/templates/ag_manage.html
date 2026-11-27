@@ -9,7 +9,7 @@
 <section class="card panel">
 <div class="panel-top"><h2>Sujets de cette AG</h2><span class="muted">{{ polls|length }} sujet{% if polls|length != 1 %}s{% endif %}</span></div>
 {% if polls %}<div class="poll-list">{% for poll in polls %}
-<a class="poll-row" href="/admin/polls/{{ poll.id }}"><span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'open' %}En cours{% elif poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'invalid' %}Dates à vérifier{% else %}Terminé{% endif %}</small></span><span class="arrow">→</span></a>
+<a class="poll-row" href="/admin/polls/{{ poll.id }}"><span class="poll-main"><strong>{{ poll.title }}</strong><small>{% if poll.phase == 'open' %}En cours{% elif poll.phase == 'upcoming' %}À venir{% elif poll.phase == 'invalid' %}Dates à vérifier{% else %}Terminé{% endif %}</small>{% if poll.ends_at %}<small>Fin prévue : {{ poll.ends_at|local_date }} (heure de Paris)</small>{% endif %}</span><span class="arrow">→</span></a>
 {% endfor %}</div>{% else %}<p class="muted">Aucun sujet pour le moment.</p>{% endif %}
 <p class="section-action"><a class="button button-primary" href="/admin/polls/new?ag_id={{ ag.id }}">+ Ajouter un sujet</a></p>
 </section>
